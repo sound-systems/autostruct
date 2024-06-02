@@ -74,12 +74,12 @@ pub struct TableColumn {
 }
 
 /**
-The `ColumnFetcher` trait defines a common interface for retrieving table column information from a database.
+The `TableInfo` trait defines a common interface for retrieving table column information from a database.
 
 # Methods
 - `get_table_columns`: Asynchronously retrieves a list of `TableColumn` structs representing the columns in the database's tables.
 */
 #[async_trait]
-pub trait ColumnFetcher {
+pub trait TableInfo {
     async fn get_table_columns(&self) -> Result<Vec<TableColumn>, Error>;
 }

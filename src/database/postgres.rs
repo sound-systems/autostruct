@@ -2,7 +2,7 @@
 The `postgres` module provides an implementation of the `ColumnFetcher` trait for PostgreSQL databases.
 */
 
-use crate::database::{ColumnFetcher, TableColumn};
+use crate::database::{TableColumn, TableInfo};
 use anyhow::{Context, Error};
 use async_trait::async_trait;
 use sqlx::{PgPool, Pool, Postgres};
@@ -52,7 +52,7 @@ impl Builder {
         self
     }
 
-    /// Builds the `Database` connection with the specified configurations.
+    /// Builds the `Database` and established a connection with the specified configurations.
     ///
     /// # Arguments
     ///
@@ -61,8 +61,8 @@ impl Builder {
     /// # Returns
     ///
     /// A `Result` containing the `Database` instance or an error.
-    pub async fn build(self, connection_string: &str) -> Result<Box<dyn ColumnFetcher>, Error> {
-        let pool = PgPool::connect(connection_string)
+    pub async fn connect(self, connection_string: String) -> Result<Box<dyn TableInfo>, Error> {
+        let pool = PgPool::connect(&connection_string)
             .await
             .context("failed to connect to postgresql database")?;
 
@@ -87,7 +87,7 @@ pub struct Database {
 }
 
 #[async_trait]
-impl ColumnFetcher for Database {
+impl TableInfo for Database {
     /**
     Retrieves a list of columns for all tables in the PostgreSQL database.
 

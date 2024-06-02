@@ -1,4 +1,17 @@
-use crate::database::{self, postgres, Kind};
+/*!
+The `generator` module contains the code that that is used to generate the Rust models that map to the database
+schema
+*/
+mod codegen;
+mod utils;
+
+use std::{collections::HashMap, mem};
+
+use crate::database::{
+    self,
+    postgres::{self, Database},
+    Kind, TableColumn,
+};
 use anyhow::{bail, Error};
 
 pub struct Arguments {
@@ -19,20 +32,17 @@ pub struct Arguments {
 ///
 /// A `Result` indicating the success or failure of the operation.
 pub async fn run(args: Arguments) -> Result<(), Error> {
-    let db: Box<dyn database::ColumnFetcher> = match args.database {
-        Kind::Postgres => {
-            postgres::Builder::new()
-                .exclude(args.exclude_tables)
-                .build(&args.connection_string)
-                .await?
-        }
-        _ => bail!("database is not yet supported"),
-    };
+    let Arguments {
+        database,
+        exclude_tables,
+        connection_string,
+        ..
+    } = args;
 
+    let db = utils::setup_database(database, exclude_tables, connection_string).await?;
     let columns = db.get_table_columns().await?;
-    for column in columns {
-        println!("{:?}", column)
-    }
+    let tables = utils::to_table_map(columns);
+    for table in tables {}
 
     Ok(())
 }
