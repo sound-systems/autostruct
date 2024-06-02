@@ -35,15 +35,12 @@ pub struct GenerateArgs {
     #[arg(long, default_value_t = false)]
     pub singular: bool,
 
-    /// Specifies the database type
-    #[arg(long, value_enum, default_value = "postgres")]
-    pub database: Database,
+    /// If provided, the struct will have derive macros for the respective database client added
+    #[arg(long, value_enum)]
+    pub client: Option<Client>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
-pub enum Database {
-    Postgres,
-    MySQL,
-    MSSQL,
-    Sqlite,
+pub enum Client {
+    SQLX,
 }
