@@ -17,8 +17,13 @@ pub mod mysql;
 pub mod postgres;
 pub mod sqlite;
 
+mod table_column;
+use table_column::TableColumn;
+
+mod table_info_provider;
+pub use table_info_provider::{TableInfo, TableInfoProvider};
+
 use anyhow::{bail, Error};
-use async_trait::async_trait;
 
 /**
 The Kind of databases that autostruct supports
@@ -42,44 +47,4 @@ impl TryFrom<&str> for Kind {
 
         Ok(db)
     }
-}
-
-/**
-Represents a column in a database table.
-
-# Fields
-- `table_name`: The name of the table.
-- `column_name`: The name of the column.
-- `udt_name`: The underlying data type name of the column.
-- `data_type`: The data type of the column.
-- `is_nullable`: Whether the column can contain NULL values.
-- `is_unique`: Whether the column has a unique constraint.
-- `is_primary_key`: Whether the column is a primary key.
-- `foreign_key_table`: The table that this column references if it is a foreign key.
-- `foreign_key_id`: The column that this column references if it is a foreign key.
-- `table_schema`: The schema of the table.
-*/
-#[derive(sqlx::FromRow, Debug)]
-pub struct TableColumn {
-    pub table_name: String,
-    pub column_name: String,
-    pub udt_name: String,
-    pub data_type: String,
-    pub is_nullable: bool,
-    pub is_unique: bool,
-    pub is_primary_key: bool,
-    pub foreign_key_table: Option<String>,
-    pub foreign_key_id: Option<String>,
-    pub table_schema: String,
-}
-
-/**
-The `TableInfo` trait defines a common interface for retrieving table column information from a database.
-
-# Methods
-- `get_table_columns`: Asynchronously retrieves a list of `TableColumn` structs representing the columns in the database's tables.
-*/
-#[async_trait]
-pub trait TableInfo {
-    async fn get_table_columns(&self) -> Result<Vec<TableColumn>, Error>;
 }

@@ -2,10 +2,12 @@
 The `postgres` module provides an implementation of the `ColumnFetcher` trait for PostgreSQL databases.
 */
 
-use crate::database::{TableColumn, TableInfo};
+use crate::database::TableInfoProvider;
 use anyhow::{Context, Error};
 use async_trait::async_trait;
 use sqlx::{PgPool, Pool, Postgres};
+
+use super::{table_column::TableColumn, table_info_provider::Converter, TableInfo};
 
 // A builder for configuring and creating a `Database` connection.
 pub struct Builder {
@@ -61,7 +63,7 @@ impl Builder {
     /// # Returns
     ///
     /// A `Result` containing the `Database` instance or an error.
-    pub async fn connect(self, connection_string: String) -> Result<Box<dyn TableInfo>, Error> {
+    pub async fn connect(self, connection_string: String) -> Result<impl TableInfoProvider, Error> {
         let pool = PgPool::connect(&connection_string)
             .await
             .context("failed to connect to postgresql database")?;
@@ -72,7 +74,7 @@ impl Builder {
             schema: self.schema.map_or(String::from("public"), |v| v),
         };
 
-        Ok(Box::new(db))
+        Ok(db)
     }
 }
 
@@ -87,14 +89,14 @@ pub struct Database {
 }
 
 #[async_trait]
-impl TableInfo for Database {
+impl TableInfoProvider for Database {
     /**
     Retrieves a list of columns for all tables in the PostgreSQL database.
 
     # Returns
     - A `Result` containing a vector of `TableColumn` structs or an error.
     */
-    async fn get_table_columns(&self) -> Result<Vec<TableColumn>, Error> {
+    async fn get_table_info(&self) -> Result<Vec<TableInfo>, Error> {
         let excluded_tables = self.excluded_tables.join(",");
         let query = "
     SELECT
@@ -131,12 +133,13 @@ impl TableInfo for Database {
         c.table_name,
         c.ordinal_position;";
 
-        let columns = sqlx::query_as::<_, TableColumn>(query)
+        let tables = sqlx::query_as::<_, TableColumn>(query)
             .bind(&self.schema)
             .bind(excluded_tables)
             .fetch_all(&self.pool)
-            .await?;
+            .await?
+            .to_table_info();
 
-        Ok(columns)
+        Ok(tables)
     }
 }

@@ -1,14 +1,12 @@
-use std::{collections::HashMap, mem};
-
 use anyhow::{bail, Error};
 
-use crate::database::{self, postgres, Kind, TableColumn};
+use crate::database::{self, postgres, Kind, TableInfoProvider};
 
 pub async fn setup_database(
     database: database::Kind,
     exclude_tables: Vec<String>,
     connection_string: String,
-) -> Result<Box<dyn database::TableInfo>, Error> {
+) -> Result<impl TableInfoProvider, Error> {
     let db = match database {
         Kind::Postgres => {
             postgres::Builder::new()
@@ -21,14 +19,8 @@ pub async fn setup_database(
     Ok(db)
 }
 
-pub fn to_table_map(columns: Vec<TableColumn>) -> HashMap<String, Vec<TableColumn>> {
-    let mut tables: HashMap<String, Vec<TableColumn>> = HashMap::new();
-    for mut column in columns {
-        let table_name = mem::take(&mut column.table_name);
-        tables
-            .entry(table_name)
-            .or_default()
-            .push(column)
-    }
-    tables
-}
+// pub fn to_table_map(columns: Vec<TableColumn>) -> HashMap<String, Vec<TableColumn>> {
+//     let mut tables: HashMap<String, Vec<TableColumn>> = HashMap::new();
+
+//     tables
+// }
