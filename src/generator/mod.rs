@@ -2,7 +2,7 @@
 The `generator` module contains the code that that is used to generate the Rust models that map to the database
 schema
 */
-mod codegen;
+mod generate;
 mod utils;
 
 use std::{collections::HashMap, mem};
