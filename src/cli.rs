@@ -1,7 +1,7 @@
 use anyhow::bail;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 
-use crate::generator::{self, Arguments};
+use crate::generator::{self};
 
 #[derive(Parser)]
 #[command(name = "autostruct")]

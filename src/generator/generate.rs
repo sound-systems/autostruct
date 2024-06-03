@@ -1,4 +1,3 @@
-use cruet::Inflector;
 
 use crate::database::TableColumn;
 

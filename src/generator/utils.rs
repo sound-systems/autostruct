@@ -27,7 +27,7 @@ pub fn to_table_map(columns: Vec<TableColumn>) -> HashMap<String, Vec<TableColum
         let table_name = mem::take(&mut column.table_name);
         tables
             .entry(table_name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(column)
     }
     tables

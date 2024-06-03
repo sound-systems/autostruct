@@ -5,14 +5,11 @@ schema
 mod generate;
 mod utils;
 
-use std::{collections::HashMap, mem};
 
 use crate::database::{
     self,
-    postgres::{self, Database},
-    Kind, TableColumn,
 };
-use anyhow::{bail, Error};
+use anyhow::{Error};
 
 pub struct Arguments {
     pub target_dir: String,
