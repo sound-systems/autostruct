@@ -18,7 +18,6 @@ pub mod postgres;
 pub mod sqlite;
 
 mod table_column;
-use table_column::TableColumn;
 
 mod table_info_provider;
 pub use table_info_provider::{TableInfo, TableInfoProvider};

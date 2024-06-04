@@ -2,7 +2,7 @@
 The `postgres` module provides an implementation of the `ColumnFetcher` trait for PostgreSQL databases.
 */
 
-use crate::database::TableInfoProvider;
+use crate::{database::TableInfoProvider, rust::Type};
 use anyhow::{Context, Error};
 use async_trait::async_trait;
 use sqlx::{PgPool, Pool, Postgres};
@@ -80,12 +80,35 @@ impl Builder {
 
 /**
     Represents a connection to a PostgreSQL database with various options used to meaningully
-    implement the `ColumnFetcher` trait
+    implement the `TableInfoProvider` trait
 */
 pub struct Database {
     schema: String,
     excluded_tables: Vec<String>,
     pool: Pool<Postgres>,
+}
+
+impl Database {
+    // Function to map PostgreSQL types to Rust types
+    fn to_rust_type(pg_type: &str) -> Type {
+        match pg_type {
+            "bool" => Type::Bool,
+            "smallint" | "int2" => Type::I16,
+            "integer" | "int4" => Type::I32,
+            "bigint" | "int8" => Type::I64,
+            "real" | "float4" => Type::F32,
+            "double precision" | "float8" => Type::F64,
+            "varchar" | "char" | "text" => Type::String,
+            "bytea" => Type::Vec(Box::new(Type::I8)),
+            "timestamp" => Type::DateTime,
+            "timestamp with time zone" | "timestamptz" => Type::DateTime,
+            "json" | "jsonb" => Type::Json,
+            "uuid" => Type::Uuid,
+            "date" => Type::DateTime, // Can be refined to a Date type if necessary
+            "array" => Type::Vec(Box::new(Type::Custom("UnknownArrayType".into()))), // Placeholder for array types
+            _ => Type::Custom(pg_type.into()), // For custom or unknown types
+        }
+    }
 }
 
 #[async_trait]
@@ -94,7 +117,7 @@ impl TableInfoProvider for Database {
     Retrieves a list of columns for all tables in the PostgreSQL database.
 
     # Returns
-    - A `Result` containing a vector of `TableColumn` structs or an error.
+    - A `Result` containing a vector of `TableInfo` structs or an error.
     */
     async fn get_table_info(&self) -> Result<Vec<TableInfo>, Error> {
         let excluded_tables = self.excluded_tables.join(",");

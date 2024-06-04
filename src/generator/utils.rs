@@ -18,9 +18,3 @@ pub async fn setup_database(
     };
     Ok(db)
 }
-
-// pub fn to_table_map(columns: Vec<TableColumn>) -> HashMap<String, Vec<TableColumn>> {
-//     let mut tables: HashMap<String, Vec<TableColumn>> = HashMap::new();
-
-//     tables
-// }
