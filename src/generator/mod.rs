@@ -6,7 +6,7 @@ mod generate;
 mod utils;
 
 use crate::database::{self, TableInfoProvider};
-use anyhow::Error;
+use anyhow::{bail, Error};
 
 pub struct Arguments {
     pub target_dir: String,
@@ -34,8 +34,8 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
     } = args;
 
     let db = utils::setup_database(database, exclude_tables, connection_string).await?;
-    let columns = db.get_table_info().await?;
-    // let tables = utils::to_table_map(columns);
+    let tables = db.get_table_info().await?;
+    println!("table info retrieved from database: {:?}", tables);
 
-    Ok(())
+    bail!("autostruct isn't quite ready yet...");
 }

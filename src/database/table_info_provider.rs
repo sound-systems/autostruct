@@ -12,6 +12,7 @@ Contains info describing a table in a database
 - `name`: The name of the table.
 - `columns`: The columns of the table
 */
+#[derive(Debug)]
 pub struct TableInfo {
     pub name: String,
     pub columns: Vec<ColumnInfo>,
@@ -31,6 +32,7 @@ Contains info describing a column in a database table.
 - `foreign_key_id`: The column that this column references if it is a foreign key.
 - `table_schema`: The schema of the table.
 */
+#[derive(Debug)]
 pub struct ColumnInfo {
     pub name: String,
     pub udt_name: String,

@@ -1,4 +1,5 @@
 // An enum to represent Rust types
+#[derive(Debug)]
 pub enum Type {
     Bool,
     I8,
