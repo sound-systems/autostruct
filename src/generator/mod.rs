@@ -33,8 +33,8 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
         ..
     } = args;
 
-    let db = utils::setup_database(database, exclude_tables, connection_string).await?;
-    let tables = db.get_table_info().await?;
+    let (provider, typer) = utils::setup(database, exclude_tables, connection_string).await?;
+    let tables = provider.get_table_info().await?;
     println!("table info retrieved from database: {:?}", tables);
 
     bail!("autostruct isn't quite ready yet...");

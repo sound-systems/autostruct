@@ -8,7 +8,6 @@ use dotenvy::dotenv;
 mod cli;
 mod database;
 mod generator;
-mod rust;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

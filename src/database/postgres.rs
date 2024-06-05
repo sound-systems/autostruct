@@ -2,12 +2,16 @@
 The `postgres` module provides an implementation of the `TableInfoProvider` trait for PostgreSQL databases.
 */
 
-use crate::{database::TableInfoProvider, rust::Type};
+use crate::database::TableInfoProvider;
 use anyhow::{Context, Error};
 use async_trait::async_trait;
 use sqlx::{PgPool, Pool, Postgres};
 
-use super::{table_column::TableColumn, table_info_provider::Converter, TableInfo};
+use super::{
+    table_column::{Converter, TableColumn},
+    table_info_provider::TypeGetter,
+    TableInfo,
+};
 
 // A builder for configuring and creating a `Database` connection.
 pub struct Builder {
@@ -88,107 +92,6 @@ pub struct Database {
     pool: Pool<Postgres>,
 }
 
-impl Database {
-    // Function to map PostgreSQL types to Rust types
-    fn to_rust_type(pg_type: &str) -> Type {
-        match pg_type {
-             "bool" => Type::Bool,
-             "bytea" => Type::String,
-             "char" => Type::String,
-             "name" => Type::String,
-             "int8" => Type::String,
-             "int2" => Type::String,
-             "int4" => Type::String,
-             "text" => Type::String,
-             "oid" => Type::String,
-             "json" => Type::String,
-             "_json" => Type::String,
-             "point" => Type::String,
-             "lseg" => Type::String,
-             "path" => Type::String,
-             "box" => Type::String,
-             "polygon" => Type::String,
-             "line" => Type::String,
-             "_line" => Type::String,
-             "cidr" => Type::String,
-             "_cidr" => Type::String,
-             "float4" => Type::String,
-             "float8" => Type::String,
-             "unknown" => Type::String,
-             "circle" => Type::String,
-             "_circle" => Type::String,
-             "macaddr8" => Type::String,
-             "_macaddr8" => Type::String,
-             "macaddr" => Type::String,
-             "inet" => Type::String,
-             "_bool" => Type::String,
-             "_bytea" => Type::String,
-             "_char" => Type::String,
-             "_name" => Type::String,
-             "_int2" => Type::String,
-             "_int4" => Type::String,
-             "_text" => Type::String,
-             "_bpchar" => Type::String,
-             "_varchar" => Type::String,
-             "_int8" => Type::String,
-             "_point" => Type::String,
-             "_lseg" => Type::String,
-             "_path" => Type::String,
-             "_box" => Type::String,
-             "_float4" => Type::String,
-             "_float8" => Type::String,
-             "_polygon" => Type::String,
-             "_oid" => Type::String,
-             "_macaddr" => Type::String,
-             "_inet" => Type::String,
-             "bpchar" => Type::String,
-             "varchar" => Type::String,
-             "date" => Type::String,
-             "time" => Type::String,
-             "timestamp" => Type::String,
-             "_timestamp" => Type::String,
-             "_date" => Type::String,
-             "_time" => Type::String,
-             "timestamptz" => Type::String,
-             "_timestamptz" => Type::String,
-             "interval" => Type::String,
-             "_interval" => Type::String,
-             "_numeric" => Type::String,
-             "timetz" => Type::String,
-             "_timetz" => Type::String,
-             "bit" => Type::String,
-             "_bit" => Type::String,
-             "varbit" => Type::String,
-             "_varbit" => Type::String,
-             "numeric" => Type::String,
-             "record" => Type::String,
-             "_record" => Type::String,
-             "uuid" => Type::String,
-             "_uuid" => Type::String,
-             "jsonb" => Type::String,
-             "_jsonb" => Type::String,
-             "int4range" => Type::String,
-             "_int4range" => Type::String,
-             "numrange" => Type::String,
-             "_numrange" => Type::String,
-             "tsrange" => Type::String,
-             "_tsrange" => Type::String,
-             "tstzrange" => Type::String,
-             "_tstzrange" => Type::String,
-             "daterange" => Type::String,
-             "_daterange" => Type::String,
-             "int8range" => Type::String,
-             "_int8range" => Type::String,
-             "jsonpath" => Type::String,
-             "_jsonpath" => Type::String,
-             "money" => Type::String,
-             "_money" => Type::String,
-             "void" => Type::String,
-             _ => Type::Custom(pg_type.to_string())
-        }
-    }
-}
-
 #[async_trait]
 impl TableInfoProvider for Database {
     /**
@@ -242,5 +145,62 @@ impl TableInfoProvider for Database {
             .to_table_info();
 
         Ok(tables)
+    }
+}
+
+pub struct PgTypeGetter();
+
+impl PgTypeGetter {
+    pub fn new() -> Self {
+        return PgTypeGetter {};
+    }
+}
+
+impl TypeGetter for PgTypeGetter {
+    fn get_rust_type(&self, column: super::table_info_provider::ColumnInfo) -> String {
+        let rust_type = match column.data_type.as_str() {
+            "bool" => "bool",
+            "char" => "i8",
+            "smallint" | "smallserial" | "int2" => "i16",
+            "int" | "serial" | "int4" => "i32",
+            "bigint" | "bigserial" | "int8" => "i64",
+            "real" | "float4" => "f32",
+            "double precision" | "float8" => "f64",
+            "varchar" | "char(n)" | "text" | "name" | "citext" => "String",
+            "bytea" => "Vec<u8>",
+            "void" => "()",
+            // assuming [`uuid`](https://crates.io/crates/uuid)
+            "uuid" => "uuid::Uuid",
+            // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
+            "date" => "chrono::NaiveDate",
+            "time" => "chrono::NaiveTime",
+            "timestamp" => "chrono::NaiveDateTime",
+            "timestamptz" => "chrono::DateTime<Utc>",
+            // assuming [`rust_decimal`](https://crates.io/crates/rust_decimal) to support numeric types
+            "numeric" => "rust_decimal::Decimal",
+            // assuming [`ipnetwork`](https://crates.io/crates/ipnetwork)
+            "inet" | "cidr" => "ipnetwork::IpNetwork",
+            // assuming [`bit-vec`](https://crates.io/crates/bit-vec)
+            "bit" | "varbit" => "bit_vec::BitVec",
+            // below types are biased towards using the sqlx::postgres::types module
+            // this should be considered for configuration when autostruct explicitly supports
+            // different rust postgres clients
+            "interval" => "PgInterval",
+            "int4range" => "PgRange<i32>",
+            "int8range" => "PgRange<i64>",
+            "tsrange" => "PgRange<chrono::NaiveDateTime>",
+            "tstzrange" => "PgRange<chrono::DateTime<Utc>>",
+            "daterange" => "PgRange<chrono::NaiveDate>",
+            "numrange" => "PgRange<rust_decimal::Decimal>",
+            "money" => "PgMoney",
+            "ltree" => "PgLTree",
+            "lquery" => "PgLQuery",
+            _ => "unkown",
+        };
+
+        if column.is_nullable {
+            return format!("Option<{}>", rust_type);
+        }
+        rust_type.to_string()
     }
 }

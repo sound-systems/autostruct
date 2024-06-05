@@ -1,8 +1,6 @@
 use anyhow::Error;
 use async_trait::async_trait;
 
-use crate::rust::{self, Type};
-
 use super::table_column::TableColumn;
 
 /**
@@ -37,7 +35,6 @@ pub struct ColumnInfo {
     pub name: String,
     pub udt_name: String,
     pub data_type: String,
-    pub rust_type: rust::Type,
     pub is_nullable: bool,
     pub is_unique: bool,
     pub is_primary_key: bool,
@@ -52,7 +49,6 @@ impl From<TableColumn> for ColumnInfo {
             name: val.column_name,
             udt_name: val.udt_name,
             data_type: val.data_type,
-            rust_type: Type::String,
             is_nullable: val.is_nullable,
             is_unique: val.is_unique,
             is_primary_key: val.is_primary_key,
@@ -64,10 +60,10 @@ impl From<TableColumn> for ColumnInfo {
 }
 
 /**
-The `Converter` trait defines a common interface for converting types into a vector of TableInfo
+The `TypeGetter` trait defines a common interface for getting the string representation of Rust types from `ColumnInfo` provided from a source database
 */
-pub trait Converter {
-    fn to_table_info(self) -> Vec<TableInfo>;
+pub trait TypeGetter {
+    fn get_rust_type(&self, column: ColumnInfo) -> String;
 }
 
 /**

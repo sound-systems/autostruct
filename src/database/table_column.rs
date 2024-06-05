@@ -2,7 +2,14 @@ use std::{collections::HashMap, mem};
 
 use crate::database::table_info_provider::ColumnInfo;
 
-use super::{table_info_provider::Converter, TableInfo};
+use super::TableInfo;
+
+/**
+The `Converter` trait defines a common interface for converting types into a vector of TableInfo
+*/
+pub trait Converter {
+    fn to_table_info(self) -> Vec<TableInfo>;
+}
 
 #[derive(sqlx::FromRow, Debug)]
 pub struct TableColumn {
