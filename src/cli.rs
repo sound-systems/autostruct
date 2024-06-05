@@ -1,4 +1,7 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use anyhow::bail;
+use clap::{Parser, Subcommand};
+
+use crate::generator::{self};
 
 #[derive(Parser)]
 #[command(name = "autostruct")]
@@ -35,12 +38,28 @@ pub struct GenerateArgs {
     #[arg(long, default_value_t = false)]
     pub singular: bool,
 
-    /// If provided, the struct will have derive macros for the respective database client added
-    #[arg(long, value_enum)]
-    pub client: Option<Client>,
+    /// Exclude table names from being generated into structs
+    #[arg(long)]
+    pub exclude: Vec<String>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
-pub enum Client {
-    SQLX,
+impl TryInto<generator::Arguments> for GenerateArgs {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<generator::Arguments, Self::Error> {
+        let conn_str = match self.database_url {
+            Some(url) => url,
+            None => bail!("no database url provided - please set it via command line arguments or with the DATABASE_URL environment variable"),
+        };
+
+        let args = generator::Arguments {
+            target_dir: self.output,
+            database: conn_str.as_str().try_into()?,
+            connection_string: conn_str,
+            singular_table_names: self.singular,
+            exclude_tables: self.exclude,
+        };
+
+        Ok(args)
+    }
 }

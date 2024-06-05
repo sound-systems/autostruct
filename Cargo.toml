@@ -6,7 +6,10 @@ description = "A tool for generating Rust structs from database schemas"
 license = "MIT"
 
 [dependencies]
+anyhow = "1.0.86"
+async-trait = "0.1.80"
 clap = { version = "4.5.4", features = ["derive", "env"] }
+cruet = "0.14.0"
 dotenvy = "0.15.7"
 sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres"] }
 tokio = { version = "1.38.0", features = ["full"] }
