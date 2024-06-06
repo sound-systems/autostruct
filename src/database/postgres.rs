@@ -2,14 +2,17 @@
 The `postgres` module provides an implementation of the `TableInfoProvider` trait for PostgreSQL databases.
 */
 
-use crate::database::TableInfoProvider;
+use crate::{
+    database::TableInfoProvider,
+    rust::{self, Type},
+};
 use anyhow::{Context, Error};
 use async_trait::async_trait;
-use sqlx::{PgPool, Pool, Postgres};
+use sqlx::{postgres::types::PgInterval, PgPool, Pool, Postgres};
 
 use super::{
     table_column::{Converter, TableColumn},
-    table_info_provider::TypeGetter,
+    table_info_provider::{ColumnInfo, RustType},
     TableInfo,
 };
 
@@ -146,61 +149,51 @@ impl TableInfoProvider for Database {
 
         Ok(tables)
     }
-}
 
-pub struct PgTypeGetter();
-
-impl PgTypeGetter {
-    pub fn new() -> Self {
-        return PgTypeGetter {};
-    }
-}
-
-impl TypeGetter for PgTypeGetter {
-    fn get_rust_type(&self, column: super::table_info_provider::ColumnInfo) -> String {
+    fn type_name_from(&self, column: ColumnInfo) -> rust::Type {
         let rust_type = match column.data_type.as_str() {
-            "bool" => "bool",
-            "char" => "i8",
-            "smallint" | "smallserial" | "int2" => "i16",
-            "int" | "serial" | "int4" => "i32",
-            "bigint" | "bigserial" | "int8" => "i64",
-            "real" | "float4" => "f32",
-            "double precision" | "float8" => "f64",
-            "varchar" | "char(n)" | "text" | "name" | "citext" => "String",
-            "bytea" => "Vec<u8>",
-            "void" => "()",
+            "bool" => Type::Bool("bool"),
+            "char" => Type::I8("i8"),
+            "smallint" | "smallserial" | "int2" => Type::I16("i16"),
+            "int" | "serial" | "int4" => Type::I32("i32"),
+            "bigint" | "bigserial" | "int8" => Type::I64("i64"),
+            "real" | "float4" => Type::F32("f32"),
+            "double precision" | "float8" => Type::F64("f64"),
+            "varchar" | "char(n)" | "text" | "name" | "citext" => Type::String("String"),
+            "bytea" => Type::ByteArray("Vec<u8>"),
+            "void" => Type::Void("()"),
             // assuming [`uuid`](https://crates.io/crates/uuid)
-            "uuid" => "uuid::Uuid",
+            "uuid" => Type::UUID("uuid::Uuid"),
             // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
-            "date" => "chrono::NaiveDate",
-            "time" => "chrono::NaiveTime",
-            "timestamp" => "chrono::NaiveDateTime",
-            "timestamptz" => "chrono::DateTime<Utc>",
+            "date" => Type::Date("chrono::NaiveDate"),
+            "time" => Type::Time("chrono::NaiveTime"),
+            "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
+            "timestamptz" => Type::TimestampWithTz("chrono::DateTime<Utc>"),
             // assuming [`rust_decimal`](https://crates.io/crates/rust_decimal) to support numeric types
-            "numeric" => "rust_decimal::Decimal",
+            "numeric" => Type::Decimal("rust_decimal::Decimal"),
             // assuming [`ipnetwork`](https://crates.io/crates/ipnetwork)
-            "inet" | "cidr" => "ipnetwork::IpNetwork",
+            "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
             // assuming [`bit-vec`](https://crates.io/crates/bit-vec)
-            "bit" | "varbit" => "bit_vec::BitVec",
+            "bit" | "varbit" => Type::Bit("bit_vec::BitVec"),
             // below types are biased towards using the sqlx::postgres::types module
             // this should be considered for configuration when autostruct explicitly supports
             // different rust postgres clients
-            "interval" => "PgInterval",
-            "int4range" => "PgRange<i32>",
-            "int8range" => "PgRange<i64>",
-            "tsrange" => "PgRange<chrono::NaiveDateTime>",
-            "tstzrange" => "PgRange<chrono::DateTime<Utc>>",
-            "daterange" => "PgRange<chrono::NaiveDate>",
-            "numrange" => "PgRange<rust_decimal::Decimal>",
-            "money" => "PgMoney",
-            "ltree" => "PgLTree",
-            "lquery" => "PgLQuery",
-            _ => "unkown",
+            "interval" => Type::Interval("PgInterval"),
+            "int4range" => Type::Range(Box::new(Type::I32("i32"))),
+            "int8range" => Type::Range(Box::new(Type::I64("i64"))),
+            "tsrange" => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
+            "tstzrange" => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
+            "daterange" => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
+            "numrange" => Type::Range(Box::new(Type::Decimal("rust_decimal::Decimal"))),
+            "money" => Type::Money("PgMoney"),
+            "ltree" => Type::Tree("PgLTree"),
+            "lquery" => Type::Query("PgLQuery"),
+            pg_type => Type::Custom(pg_type.to_string()),
         };
 
         if column.is_nullable {
-            return format!("Option<{}>", rust_type);
+            return Type::Option(Box::new(rust_type));
         }
-        rust_type.to_string()
+        rust_type
     }
 }

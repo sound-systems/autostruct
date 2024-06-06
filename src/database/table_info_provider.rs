@@ -1,6 +1,8 @@
 use anyhow::Error;
 use async_trait::async_trait;
 
+use crate::rust;
+
 use super::table_column::TableColumn;
 
 /**
@@ -59,20 +61,17 @@ impl From<TableColumn> for ColumnInfo {
     }
 }
 
-/**
-The `TypeGetter` trait defines a common interface for getting the string representation of Rust types from `ColumnInfo` provided from a source database
-*/
-pub trait TypeGetter {
-    fn get_rust_type(&self, column: ColumnInfo) -> String;
-}
+pub type RustType = String;
 
 /**
 The `TableInfoProvider` trait defines a common interface for retrieving table column information from a database.
 
 # Methods
+- `type_name_from`: returns the Rust type name from database column info
 - `get_table_columns`: Asynchronously retrieves a list of `TableColumn` structs representing the columns in the database's tables.
 */
 #[async_trait]
 pub trait TableInfoProvider {
+    fn type_name_from(&self, column: ColumnInfo) -> rust::Type;
     async fn get_table_info(&self) -> Result<Vec<TableInfo>, Error>;
 }

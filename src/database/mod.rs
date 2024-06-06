@@ -20,7 +20,7 @@ pub mod sqlite;
 mod table_column;
 
 mod table_info_provider;
-pub use table_info_provider::{TableInfo, TableInfoProvider, TypeGetter};
+pub use table_info_provider::{TableInfo, TableInfoProvider};
 
 use anyhow::{bail, Error};
 
