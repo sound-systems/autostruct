@@ -27,6 +27,7 @@ pub enum Type {
     Query(&'static str),
     Void(&'static str),
     Option(Box<Type>),
+    Vector(Box<Type>),
     Custom(String),
 }
 
@@ -59,7 +60,8 @@ impl std::fmt::Display for Type {
             Type::Tree(name) => write!(f, "{}", name),
             Type::Query(name) => write!(f, "{}", name),
             Type::Void(name) => write!(f, "{}", name),
-            Type::Option(name) => write!(f, "Option<{}>", name),
+            Type::Vector(t) => write!(f, "Vec<{t}>"),
+            Type::Option(t) => write!(f, "Option<{t}>"),
             Type::Custom(name) => write!(f, "{}", name),
         }
     }
