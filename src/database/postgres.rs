@@ -150,7 +150,7 @@ impl TableInfoProvider for Database {
         Ok(tables)
     }
 
-    fn type_name_from(&self, column: ColumnInfo) -> rust::Type {
+    fn type_name_from(&self, column: &ColumnInfo) -> rust::Type {
         let rust_type = match column.data_type.as_str() {
             "bool" => Type::Bool("bool"),
             "char" => Type::I8("i8"),

@@ -72,6 +72,6 @@ The `TableInfoProvider` trait defines a common interface for retrieving table co
 */
 #[async_trait]
 pub trait TableInfoProvider {
-    fn type_name_from(&self, column: ColumnInfo) -> rust::Type;
+    fn type_name_from(&self, column: &ColumnInfo) -> rust::Type;
     async fn get_table_info(&self) -> Result<Vec<TableInfo>, Error>;
 }

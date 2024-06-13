@@ -13,7 +13,10 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-
 # Added by cargo
 
 /target
+
+# default output directory source code will be written to
+# generated during integration tests
+/autostructs
