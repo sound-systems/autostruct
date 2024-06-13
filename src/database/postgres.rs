@@ -8,11 +8,11 @@ use crate::{
 };
 use anyhow::{Context, Error};
 use async_trait::async_trait;
-use sqlx::{postgres::types::PgInterval, PgPool, Pool, Postgres};
+use sqlx::{PgPool, Pool, Postgres};
 
 use super::{
     table_column::{Converter, TableColumn},
-    table_info_provider::{ColumnInfo, RustType},
+    table_info_provider::ColumnInfo,
     TableInfo,
 };
 
@@ -70,8 +70,8 @@ impl Builder {
     /// # Returns
     ///
     /// A `Result` containing the `Database` instance or an error.
-    pub async fn connect(self, connection_string: String) -> Result<impl TableInfoProvider, Error> {
-        let pool = PgPool::connect(&connection_string)
+    pub async fn connect(self, connection_string: &str) -> Result<impl TableInfoProvider, Error> {
+        let pool = PgPool::connect(connection_string)
             .await
             .context("failed to connect to postgresql database")?;
 

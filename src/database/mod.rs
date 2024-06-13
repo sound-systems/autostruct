@@ -41,7 +41,7 @@ impl TryFrom<&str> for Kind {
         let db = if value.starts_with("postgres://") {
             Self::Postgres
         } else {
-            bail!("the database you are trying to connect to is not yet supported")
+            bail!("failed to infer database kind from provided connection string")
         };
 
         Ok(db)

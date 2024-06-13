@@ -106,6 +106,10 @@ cargo run -- generate -o ./output -d "your_database_connection_string" --databas
 
 ### Testing
 
+TODO: improve docker testing docs
+For example - test containers need the following setting for Docker Desktop enabled:
+`Allow the default Docker socket to be used (requires password)`
+
 You can run the tests using:
 
 ```sh

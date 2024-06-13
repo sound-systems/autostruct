@@ -7,10 +7,10 @@ use crate::database::{
 };
 
 pub async fn setup(
-    database: database::Kind,
+    connection_string: &str,
     exclude_tables: Vec<String>,
-    connection_string: String,
 ) -> Result<impl TableInfoProvider, Error> {
+    let database: database::Kind = connection_string.try_into()?;
     let provider = match database {
         Kind::Postgres => {
             postgres::Builder::new()

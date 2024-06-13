@@ -1,3 +1,6 @@
+-- Setup expected extensions
+create extension if not exists "uuid-ossp";
+
 -- Table 1: Basic Types
 CREATE TABLE table_basic_types (
     id SERIAL PRIMARY KEY,
@@ -18,7 +21,6 @@ CREATE TABLE table_character_types (
     varchar_column VARCHAR(255) NOT NULL,
     char_column CHAR(10),
     text_column TEXT,
-    citext_column CITEXT,
     foreign_key_basic INT REFERENCES table_basic_types(id)
 );
 
