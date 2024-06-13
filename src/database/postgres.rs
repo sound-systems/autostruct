@@ -152,10 +152,10 @@ impl TableInfoProvider for Database {
 
     fn type_name_from(&self, column: &ColumnInfo) -> rust::Type {
         let rust_type = match column.data_type.as_str() {
-            "bool" => Type::Bool("bool"),
+            "bool" | "boolean" => Type::Bool("bool"),
             "char" => Type::I8("i8"),
             "smallint" | "smallserial" | "int2" => Type::I16("i16"),
-            "int" | "serial" | "int4" => Type::I32("i32"),
+            "int" | "integer" | "serial" | "int4" => Type::I32("i32"),
             "bigint" | "bigserial" | "int8" => Type::I64("i64"),
             "real" | "float4" => Type::F32("f32"),
             "double precision" | "float8" => Type::F64("f64"),
@@ -168,13 +168,15 @@ impl TableInfoProvider for Database {
             "date" => Type::Date("chrono::NaiveDate"),
             "time" => Type::Time("chrono::NaiveTime"),
             "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
-            "timestamptz" => Type::TimestampWithTz("chrono::DateTime<Utc>"),
+            "timestamp with time zone" | "timestamptz" => {
+                Type::TimestampWithTz("chrono::DateTime<Utc>")
+            }
             // assuming [`rust_decimal`](https://crates.io/crates/rust_decimal) to support numeric types
             "numeric" => Type::Decimal("rust_decimal::Decimal"),
             // assuming [`ipnetwork`](https://crates.io/crates/ipnetwork)
             "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
             // assuming [`bit-vec`](https://crates.io/crates/bit-vec)
-            "bit" | "varbit" => Type::Bit("bit_vec::BitVec"),
+            "bit" | "varbit" | "bit varying" => Type::Bit("bit_vec::BitVec"),
             // below types are biased towards using the sqlx::postgres::types module
             // this should be considered for configuration when autostruct explicitly supports
             // different rust postgres clients
