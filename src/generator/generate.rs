@@ -17,7 +17,6 @@ pub fn code_from(
 
     code.push_str(&format!("pub struct {} {{\n", table.name.to_pascal_case()));
 
-    // pub target_dir: String,
     for column in &table.columns {
         let rust_type = info_provider.type_name_from(&column);
         let field_name = column.name.to_snake_case();
@@ -29,12 +28,3 @@ pub fn code_from(
 
     Ok(code)
 }
-
-// pub fn struct_code(table: String, columns: Vec<TableColumn>) -> String {
-// let code = String::new();
-// code.push_str("#![allow(dead_code)]\n");
-
-// for column in columns {
-//     let column_name = column.column_name.to_snake_case();
-// }
-// }
