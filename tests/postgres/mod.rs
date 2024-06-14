@@ -28,7 +28,7 @@ pub async fn test_integration() -> Result<(), Error> {
         .await
         .context("migrations used for testing purposes failed to apply")?;
 
-    let args = generator::Arguments::from(&url);
+    let args = generator::Arguments::from(url);
     autostruct::generator::run(args)
         .await
         .context("autostruct generator failed")?;

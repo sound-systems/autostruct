@@ -159,15 +159,18 @@ impl TableInfoProvider for Database {
             "bigint" | "bigserial" | "int8" => Type::I64("i64"),
             "real" | "float4" => Type::F32("f32"),
             "double precision" | "float8" => Type::F64("f64"),
-            "varchar" | "char(n)" | "text" | "name" | "citext" => Type::String("String"),
+            "varchar" | "char(n)" | "text" | "name" | "character varying" | "character"
+            | "citext" => Type::String("String"),
             "bytea" => Type::ByteArray("Vec<u8>"),
             "void" => Type::Void("()"),
             // assuming [`uuid`](https://crates.io/crates/uuid)
             "uuid" => Type::UUID("uuid::Uuid"),
             // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
             "date" => Type::Date("chrono::NaiveDate"),
-            "time" => Type::Time("chrono::NaiveTime"),
-            "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
+            "time without time zone" | "time with time zone" | "time" => {
+                Type::Time("chrono::NaiveTime")
+            }
+            "timestamp without time zone" | "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
             "timestamp with time zone" | "timestamptz" => {
                 Type::TimestampWithTz("chrono::DateTime<Utc>")
             }
