@@ -3,7 +3,7 @@ The `convert` module provides various implementations to map raw schema types in
 a consuming module intended to generate Rust code requires
 */
 
-use std::{collections::HashMap, mem};
+use std::{backtrace, collections::HashMap, mem};
 
 use super::{
     raw_schema::{self, EnumType, TableColumn},
@@ -70,9 +70,13 @@ impl EnumConverter for Vec<EnumType> {
                 acc
             })
             .into_iter()
-            .map(|e| Enum {
-                name: e.0,
-                values: e.1,
+            .map(|mut e| {
+                // ensure enums are sorted
+                e.1.sort_by(|a, b| a.order.total_cmp(&b.order));
+                Enum {
+                    name: e.0,
+                    values: e.1,
+                }
             })
             .collect()
     }

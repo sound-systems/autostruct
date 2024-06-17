@@ -3,8 +3,6 @@ use async_trait::async_trait;
 
 use crate::rust;
 
-use super::raw_schema::TableColumn;
-
 #[derive(Debug)]
 pub struct DatabaseSchema {
     pub enumerations: Vec<Enum>,
@@ -106,6 +104,6 @@ The `schema::InfoProvider` trait defines a common interface for retrieving datab
 */
 #[async_trait]
 pub trait InfoProvider {
-    fn type_name_from(&self, column: &Column) -> rust::Type;
+    fn type_name_from(&self, db_type: &str) -> rust::Type;
     async fn get_schema(&self) -> Result<DatabaseSchema, Error>;
 }

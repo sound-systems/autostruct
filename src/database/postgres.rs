@@ -12,7 +12,7 @@ use sqlx::{PgPool, Pool, Postgres};
 
 use super::{
     convert::{CompositeTypeConverter, EnumConverter, TableConverter},
-    raw_schema::{self, EnumType, TableColumn},
+    raw_schema::{self, TableColumn},
     schema::{self, Column, DatabaseSchema, Enum},
     Table,
 };
@@ -227,8 +227,8 @@ impl InfoProvider for Database {
         Ok(schema)
     }
 
-    fn type_name_from(&self, column: &Column) -> rust::Type {
-        let rust_type = match column.udt_name.as_str() {
+    fn type_name_from(&self, db_type: &str) -> rust::Type {
+        match db_type {
             "bool" | "boolean" => Type::Bool("bool"),
             "char" => Type::I8("i8"),
             "smallint" | "smallserial" | "int2" => Type::I16("i16"),
@@ -271,12 +271,7 @@ impl InfoProvider for Database {
             "ltree" => Type::Tree("PgLTree"),
             "lquery" => Type::Query("PgLQuery"),
             pg_type => Type::Custom(pg_type.to_string()),
-        };
-
-        if column.is_nullable {
-            return Type::Option(Box::new(rust_type));
         }
-        rust_type
     }
 
     // fn to_rust_type(pg_type: &str) -> Type {

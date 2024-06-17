@@ -21,7 +21,7 @@ mod convert;
 mod raw_schema;
 
 mod schema;
-pub use schema::{CompositeType, Enum, InfoProvider, Table};
+pub use schema::{Column, CompositeType, Enum, InfoProvider, Table};
 
 use anyhow::{bail, Error};
 

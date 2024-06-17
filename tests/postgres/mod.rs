@@ -2,7 +2,6 @@ use anyhow::{Context, Error};
 use autostruct::generator;
 use sqlx::{migrate::Migrator, PgPool};
 use testcontainers_modules::{postgres::Postgres, testcontainers::runners::AsyncRunner};
-use tokio::signal;
 
 static MIGRATOR: Migrator = sqlx::migrate!("tests/postgres/migrations");
 

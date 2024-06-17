@@ -9,7 +9,10 @@ use tokio::{
 
 use crate::database::InfoProvider;
 
-use super::{generate, utils};
+use super::{
+    code::{self, Options},
+    generate, utils,
+};
 
 pub struct Arguments {
     pub target_dir: String,
@@ -52,11 +55,19 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
         exclude_tables,
         connection_string,
         target_dir,
-        ..
+        singular_table_names,
     } = args;
 
     let provider = utils::setup(&connection_string, exclude_tables).await?;
-    let schema = provider.get_schema().await?;
+    let generator = code::Generator::new(
+        Options {
+            singular: singular_table_names,
+        },
+        Box::new(provider),
+    );
+
+    let code_snippets = generator.generate_code().await?;
+
     let output_dir = Path::new(&target_dir);
     if !output_dir.exists() {
         fs::create_dir_all(output_dir)
@@ -64,11 +75,15 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
             .context("failed to create directory that generated source code will be written to")?;
     }
 
-    for table in schema.tables {
-        let code = generate::code_from(&table, &provider)
-            .context("failed to generate Rust struct from table definition")?;
-        let file_name = table.name.to_snake_case();
+    for snippet in code_snippets {
+        let file_name = snippet.id.to_snake_case();
         let source_file = output_dir.join(format!("{file_name}.rs"));
+        let mut code = String::new();
+        code.push_str("#![allow(dead_code)]\n");
+        code.push_str(
+            "// Generated with autostruct\n// https://github.com/sound-systems/autostruct\n\n",
+        );
+        code.push_str(&snippet.code);
         let mut file = File::create(source_file)
             .await
             .context("failed to create source code file")?;
