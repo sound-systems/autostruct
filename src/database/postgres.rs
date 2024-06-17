@@ -6,14 +6,14 @@ use crate::{
     database::InfoProvider,
     rust::{self, Type},
 };
-use anyhow::{bail, Context, Error};
+use anyhow::{Context, Error};
 use async_trait::async_trait;
 use sqlx::{PgPool, Pool, Postgres};
 
 use super::{
-    convert::TableConverter,
-    raw_schema::TableColumn,
-    schema::{Column, DatabaseSchema},
+    convert::{CompositeTypeConverter, EnumConverter, TableConverter},
+    raw_schema::{self, EnumType, TableColumn},
+    schema::{self, Column, DatabaseSchema, Enum},
     Table,
 };
 
@@ -91,67 +91,72 @@ impl Builder {
     implement the `TableInfoProvider` trait
 */
 pub struct Database {
+    pool: Pool<Postgres>,
     schema: String,
     excluded_tables: Vec<String>,
-    pool: Pool<Postgres>,
 }
 
-#[async_trait]
-impl InfoProvider for Database {
-    async fn get_schema(&self) -> Result<DatabaseSchema, Error> {
-        bail!("not implemented")
+impl Database {
+    async fn get_enums(&self) -> Result<Vec<Enum>, Error> {
+        let query = "
+        SELECT
+            n.nspname AS schema_name,
+            t.typname AS name,
+            e.enumlabel AS value,
+            e.enumsortorder AS sort_order
+        FROM
+            pg_type t
+        JOIN
+            pg_namespace n ON t.typnamespace = n.oid
+        JOIN
+            pg_enum e ON t.oid = e.enumtypid
+        WHERE
+            n.nspname = $1
+        ORDER BY
+            schema_name, t.typname, e.enumsortorder;";
+
+        let enums = sqlx::query_as::<_, raw_schema::EnumType>(query)
+            .bind(&self.schema)
+            .fetch_all(&self.pool)
+            .await?
+            .to_enums();
+
+        Ok(enums)
     }
 
-    fn type_name_from(&self, column: &Column) -> rust::Type {
-        let rust_type = match column.udt_name.as_str() {
-            "bool" | "boolean" => Type::Bool("bool"),
-            "char" => Type::I8("i8"),
-            "smallint" | "smallserial" | "int2" => Type::I16("i16"),
-            "int" | "integer" | "serial" | "int4" => Type::I32("i32"),
-            "bigint" | "bigserial" | "int8" => Type::I64("i64"),
-            "real" | "float4" => Type::F32("f32"),
-            "double precision" | "float8" => Type::F64("f64"),
-            "varchar" | "char(n)" | "text" | "name" | "character varying" | "character"
-            | "citext" | "bpchar" => Type::String("String"),
-            "bytea" => Type::ByteArray("Vec<u8>"),
-            "void" => Type::Void("()"),
-            // assuming [`uuid`](https://crates.io/crates/uuid)
-            "uuid" => Type::UUID("uuid::Uuid"),
-            // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
-            "date" => Type::Date("chrono::NaiveDate"),
-            "time without time zone" | "time with time zone" | "time" => {
-                Type::Time("chrono::NaiveTime")
-            }
-            "timestamp without time zone" | "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
-            "timestamp with time zone" | "timestamptz" => {
-                Type::TimestampWithTz("chrono::DateTime<Utc>")
-            }
-            // assuming [`rust_decimal`](https://crates.io/crates/rust_decimal) to support numeric types
-            "numeric" => Type::Decimal("rust_decimal::Decimal"),
-            // assuming [`ipnetwork`](https://crates.io/crates/ipnetwork)
-            "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
-            // assuming [`bit-vec`](https://crates.io/crates/bit-vec)
-            "bit" | "varbit" | "bit varying" => Type::Bit("bit_vec::BitVec"),
-            // below types are biased towards using the sqlx::postgres::types module
-            // this should be considered for configuration when autostruct explicitly supports
-            // different rust postgres clients
-            "interval" => Type::Interval("PgInterval"),
-            "int4range" => Type::Range(Box::new(Type::I32("i32"))),
-            "int8range" => Type::Range(Box::new(Type::I64("i64"))),
-            "tsrange" => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
-            "tstzrange" => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
-            "daterange" => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
-            "numrange" => Type::Range(Box::new(Type::Decimal("rust_decimal::Decimal"))),
-            "money" => Type::Money("PgMoney"),
-            "ltree" => Type::Tree("PgLTree"),
-            "lquery" => Type::Query("PgLQuery"),
-            pg_type => Type::Custom(pg_type.to_string()),
-        };
+    async fn get_composite_types(&self) -> Result<Vec<schema::CompositeType>, Error> {
+        let query = "
+        SELECT
+            n.nspname AS schema_name,
+            t.typname AS name,
+            a.attname AS attribute_name,
+            bt.typname AS data_type,
+            a.attnum AS attribute_position
+        FROM
+            pg_type t
+        JOIN
+            pg_namespace n ON t.typnamespace = n.oid
+        JOIN
+            pg_class c ON t.typrelid = c.oid
+        JOIN
+            pg_attribute a ON c.oid = a.attrelid
+        JOIN
+            pg_type bt ON a.atttypid = bt.oid
+        WHERE
+            t.typtype = 'c'
+            AND c.relkind = 'c'
+            AND a.attnum > 0
+            AND n.nspname = $1
+        ORDER BY
+            schema_name, t.typname, a.attnum;";
 
-        if column.is_nullable {
-            return Type::Option(Box::new(rust_type));
-        }
-        rust_type
+        let composite_types = sqlx::query_as::<_, raw_schema::CompositeType>(query)
+            .bind(&self.schema)
+            .fetch_all(&self.pool)
+            .await?
+            .to_composite_types();
+
+        Ok(composite_types)
     }
 
     /**
@@ -205,6 +210,73 @@ impl InfoProvider for Database {
             .to_tables();
 
         Ok(tables)
+    }
+}
+
+#[async_trait]
+impl InfoProvider for Database {
+    async fn get_schema(&self) -> Result<DatabaseSchema, Error> {
+        let enumerations = self.get_enums().await?;
+        let composite_types = self.get_composite_types().await?;
+        let tables = self.get_table_info().await?;
+        let schema = DatabaseSchema {
+            enumerations,
+            composite_types,
+            tables,
+        };
+        Ok(schema)
+    }
+
+    fn type_name_from(&self, column: &Column) -> rust::Type {
+        let rust_type = match column.udt_name.as_str() {
+            "bool" | "boolean" => Type::Bool("bool"),
+            "char" => Type::I8("i8"),
+            "smallint" | "smallserial" | "int2" => Type::I16("i16"),
+            "int" | "integer" | "serial" | "int4" => Type::I32("i32"),
+            "bigint" | "bigserial" | "int8" => Type::I64("i64"),
+            "real" | "float4" => Type::F32("f32"),
+            "double precision" | "float8" => Type::F64("f64"),
+            "varchar" | "char(n)" | "text" | "name" | "character varying" | "character"
+            | "citext" | "bpchar" => Type::String("String"),
+            "bytea" => Type::ByteArray("Vec<u8>"),
+            "void" => Type::Void("()"),
+            // assuming [`uuid`](https://crates.io/crates/uuid)
+            "uuid" => Type::UUID("uuid::Uuid"),
+            // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
+            "date" => Type::Date("chrono::NaiveDate"),
+            "time without time zone" | "time with time zone" | "time" => {
+                Type::Time("chrono::NaiveTime")
+            }
+            "timestamp without time zone" | "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
+            "timestamp with time zone" | "timestamptz" => {
+                Type::TimestampWithTz("chrono::DateTime<Utc>")
+            }
+            // assuming [`rust_decimal`](https://crates.io/crates/rust_decimal) to support numeric types
+            "numeric" => Type::Decimal("rust_decimal::Decimal"),
+            // assuming [`ipnetwork`](https://crates.io/crates/ipnetwork)
+            "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
+            // assuming [`bit-vec`](https://crates.io/crates/bit-vec)
+            "bit" | "varbit" | "bit varying" => Type::Bit("bit_vec::BitVec"),
+            // below types are biased towards using the sqlx::postgres::types module
+            // this should be considered for configuration when autostruct explicitly supports
+            // different rust postgres clients
+            "interval" => Type::Interval("PgInterval"),
+            "int4range" => Type::Range(Box::new(Type::I32("i32"))),
+            "int8range" => Type::Range(Box::new(Type::I64("i64"))),
+            "tsrange" => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
+            "tstzrange" => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
+            "daterange" => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
+            "numrange" => Type::Range(Box::new(Type::Decimal("rust_decimal::Decimal"))),
+            "money" => Type::Money("PgMoney"),
+            "ltree" => Type::Tree("PgLTree"),
+            "lquery" => Type::Query("PgLQuery"),
+            pg_type => Type::Custom(pg_type.to_string()),
+        };
+
+        if column.is_nullable {
+            return Type::Option(Box::new(rust_type));
+        }
+        rust_type
     }
 
     // fn to_rust_type(pg_type: &str) -> Type {

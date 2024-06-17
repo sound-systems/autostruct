@@ -6,8 +6,8 @@ a consuming module intended to generate Rust code requires
 use std::{collections::HashMap, mem};
 
 use super::{
-    raw_schema::{EnumType, TableColumn},
-    schema::{Column, Enum, EnumValue},
+    raw_schema::{self, EnumType, TableColumn},
+    schema::{self, Attribute, Column, Enum, EnumValue},
     Table,
 };
 
@@ -73,6 +73,31 @@ impl EnumConverter for Vec<EnumType> {
             .map(|e| Enum {
                 name: e.0,
                 values: e.1,
+            })
+            .collect()
+    }
+}
+
+pub trait CompositeTypeConverter {
+    fn to_composite_types(self) -> Vec<schema::CompositeType>;
+}
+
+impl CompositeTypeConverter for Vec<raw_schema::CompositeType> {
+    fn to_composite_types(self) -> Vec<schema::CompositeType> {
+        let composites: HashMap<String, Vec<Attribute>> = HashMap::new();
+        self.into_iter()
+            .fold(composites, |mut acc, mut composite| {
+                let c_name = mem::take(&mut composite.name);
+                acc.entry(c_name).or_default().push(Attribute {
+                    name: composite.attribute_name,
+                    data_type: composite.data_type,
+                });
+                acc
+            })
+            .into_iter()
+            .map(|c| schema::CompositeType {
+                name: c.0,
+                attributes: c.1,
             })
             .collect()
     }

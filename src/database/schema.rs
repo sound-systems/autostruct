@@ -7,9 +7,9 @@ use super::raw_schema::TableColumn;
 
 #[derive(Debug)]
 pub struct DatabaseSchema {
-    enumerations: Vec<Enum>,
-    composite_types: Vec<CompositeType>,
-    tables: Vec<Table>,
+    pub enumerations: Vec<Enum>,
+    pub composite_types: Vec<CompositeType>,
+    pub tables: Vec<Table>,
 }
 
 /**
@@ -35,7 +35,7 @@ Contains info describing a user defined enum value in a database
 #[derive(Debug)]
 pub struct EnumValue {
     pub name: String,
-    pub order: i64,
+    pub order: f32,
 }
 
 /**
@@ -108,5 +108,4 @@ The `schema::InfoProvider` trait defines a common interface for retrieving datab
 pub trait InfoProvider {
     fn type_name_from(&self, column: &Column) -> rust::Type;
     async fn get_schema(&self) -> Result<DatabaseSchema, Error>;
-    async fn get_table_info(&self) -> Result<Vec<Table>, Error>;
 }

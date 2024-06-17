@@ -9,7 +9,7 @@ code generation
 pub struct EnumType {
     pub name: String,
     pub value: String,
-    pub sort_order: i64,
+    pub sort_order: f32,
 }
 
 #[derive(sqlx::FromRow, Debug)]
