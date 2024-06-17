@@ -7,11 +7,9 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
-use crate::database::InfoProvider;
 
 use super::{
-    code::{self, Options},
-    generate, utils,
+    code::{self, Options}, utils,
 };
 
 pub struct Arguments {

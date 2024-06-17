@@ -3,7 +3,7 @@ The `convert` module provides various implementations to map raw schema types in
 a consuming module intended to generate Rust code requires
 */
 
-use std::{backtrace, collections::HashMap, mem};
+use std::{collections::HashMap, mem};
 
 use super::{
     raw_schema::{self, EnumType, TableColumn},

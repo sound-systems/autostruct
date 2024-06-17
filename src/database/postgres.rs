@@ -13,7 +13,7 @@ use sqlx::{PgPool, Pool, Postgres};
 use super::{
     convert::{CompositeTypeConverter, EnumConverter, TableConverter},
     raw_schema::{self, TableColumn},
-    schema::{self, Column, DatabaseSchema, Enum},
+    schema::{self, DatabaseSchema, Enum},
     Table,
 };
 
@@ -241,7 +241,7 @@ impl InfoProvider for Database {
             "bytea" => Type::ByteArray("Vec<u8>"),
             "void" => Type::Void("()"),
             // assuming [`uuid`](https://crates.io/crates/uuid)
-            "uuid" => Type::UUID("uuid::Uuid"),
+            "uuid" => Type::Uuid("uuid::Uuid"),
             // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
             "date" => Type::Date("chrono::NaiveDate"),
             "time without time zone" | "time with time zone" | "time" => {

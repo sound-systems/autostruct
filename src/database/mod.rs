@@ -21,7 +21,7 @@ mod convert;
 mod raw_schema;
 
 mod schema;
-pub use schema::{Column, CompositeType, Enum, InfoProvider, Table};
+pub use schema::{CompositeType, Enum, InfoProvider, Table};
 
 use anyhow::{bail, Error};
 
@@ -30,8 +30,8 @@ The Kind of databases that autostruct supports
 */
 pub enum Kind {
     Postgres,
-    MySQL,
-    MSSQL,
+    MySql,
+    MsSql,
     Sqlite,
 }
 

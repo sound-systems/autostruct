@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::{Context, Error};
 use autostruct::generator;
 use sqlx::{migrate::Migrator, PgPool};

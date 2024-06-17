@@ -1,5 +1,5 @@
 use crate::{database, rust::Type};
-use anyhow::{bail, Error};
+use anyhow::Error;
 use cruet::Inflector;
 use std::collections::HashSet;
 
@@ -37,14 +37,14 @@ impl Generator {
         let mut snippets: Vec<Snippet> = vec![];
         snippets.append(&mut self.code_from_enums(&schema.enumerations));
         snippets.append(&mut self.code_from_composites(&schema.composite_types));
-        snippets.append(&mut &mut self.code_from_tables(&schema.tables));
+        snippets.append(&mut self.code_from_tables(&schema.tables));
 
         Ok(snippets)
     }
 
-    fn code_from_enums(&self, enums: &Vec<database::Enum>) -> Vec<Snippet> {
+    fn code_from_enums(&self, enums: &[database::Enum]) -> Vec<Snippet> {
         enums
-            .into_iter()
+            .iter()
             .map(|e| {
                 let mut code = String::new();
                 let name = e.name.to_pascal_case();
@@ -67,9 +67,9 @@ impl Generator {
             .collect()
     }
 
-    fn code_from_composites(&self, composites: &Vec<database::CompositeType>) -> Vec<Snippet> {
+    fn code_from_composites(&self, composites: &[database::CompositeType]) -> Vec<Snippet> {
         composites
-            .into_iter()
+            .iter()
             .map(|composite| {
                 let mut code = String::new();
                 let table_name = self.format_name(&composite.name);
@@ -93,9 +93,9 @@ impl Generator {
             .collect()
     }
 
-    fn code_from_tables(&self, tables: &Vec<database::Table>) -> Vec<Snippet> {
+    fn code_from_tables(&self, tables: &[database::Table]) -> Vec<Snippet> {
         tables
-            .into_iter()
+            .iter()
             .map(|table| {
                 let mut code = String::new();
                 let table_name = self.format_name(&table.name);
