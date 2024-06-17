@@ -11,7 +11,8 @@ use async_trait::async_trait;
 use sqlx::{PgPool, Pool, Postgres};
 
 use super::{
-    raw_schema::{Converter, TableColumn},
+    convert::TableConverter,
+    raw_schema::TableColumn,
     schema::{Column, DatabaseSchema},
     Table,
 };
@@ -61,7 +62,7 @@ impl Builder {
         self
     }
 
-    /// Builds the `Database` and established a connection with the specified configurations.
+    /// Builds the `Database` and establishes a connection with the specified configurations.
     ///
     /// # Arguments
     ///
@@ -201,7 +202,7 @@ impl InfoProvider for Database {
             .bind(excluded_tables)
             .fetch_all(&self.pool)
             .await?
-            .to_table_info();
+            .to_tables();
 
         Ok(tables)
     }

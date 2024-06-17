@@ -25,6 +25,13 @@ pub struct Enum {
     pub values: Vec<EnumValue>,
 }
 
+/**
+Contains info describing a user defined enum value in a database
+
+# Fields
+- `name`: The name of the enum value.
+- `order`: The order in which the respective value should be sorted
+*/
 #[derive(Debug)]
 pub struct EnumValue {
     pub name: String,
@@ -90,24 +97,8 @@ pub struct Column {
     pub table_schema: String,
 }
 
-impl From<TableColumn> for Column {
-    fn from(val: TableColumn) -> Self {
-        Column {
-            name: val.column_name,
-            udt_name: val.udt_name,
-            data_type: val.data_type,
-            is_nullable: val.is_nullable,
-            is_unique: val.is_unique,
-            is_primary_key: val.is_primary_key,
-            foreign_key_table: val.foreign_key_table,
-            foreign_key_id: val.foreign_key_id,
-            table_schema: val.table_schema,
-        }
-    }
-}
-
 /**
-The `schema::InfoProvider` trait defines a common interface for retrieving table column information from a database.
+The `schema::InfoProvider` trait defines a common interface for retrieving database schema information from a database.
 
 # Methods
 - `type_name_from`: returns the Rust type name from database column info

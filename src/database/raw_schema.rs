@@ -1,15 +1,9 @@
-use std::{collections::HashMap, mem};
-
-use crate::database::schema::Column;
-
-use super::Table;
-
-/**
-The `Converter` trait defines a common interface for converting types into a vector of TableInfo
+/*!
+The `raw_schema` module exposes types intended to be used directly in sql queries that retrieve info from
+a databases respective information schema implementation.
+These are intended to be raw types that model the returned rows that are then mapped to types purposed for informing
+code generation
 */
-pub trait Converter {
-    fn to_table_info(self) -> Vec<Table>;
-}
 
 #[derive(sqlx::FromRow, Debug)]
 pub struct EnumType {
@@ -37,22 +31,4 @@ pub struct TableColumn {
     pub foreign_key_table: Option<String>,
     pub foreign_key_id: Option<String>,
     pub table_schema: String,
-}
-
-impl Converter for Vec<TableColumn> {
-    fn to_table_info(self) -> Vec<Table> {
-        let tables: HashMap<String, Vec<Column>> = HashMap::new();
-        self.into_iter()
-            .fold(tables, |mut acc, mut column| {
-                let table_name = mem::take(&mut column.table_name);
-                acc.entry(table_name).or_default().push(column.into());
-                acc
-            })
-            .into_iter()
-            .map(|t| Table {
-                name: t.0,
-                columns: t.1,
-            })
-            .collect()
-    }
 }
