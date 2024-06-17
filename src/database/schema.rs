@@ -3,7 +3,52 @@ use async_trait::async_trait;
 
 use crate::rust;
 
-use super::table_column::TableColumn;
+use super::raw_schema::TableColumn;
+
+#[derive(Debug)]
+pub struct DatabaseSchema {
+    enumerations: Vec<Enum>,
+    composite_types: Vec<CompositeType>,
+    tables: Vec<Table>,
+}
+
+/**
+Contains info describing a user defined enumeration in a database
+
+# Fields
+- `name`: The name of the enum.
+- `values`: The values of the enumeration
+*/
+#[derive(Debug)]
+pub struct Enum {
+    pub name: String,
+    pub values: Vec<EnumValue>,
+}
+
+#[derive(Debug)]
+pub struct EnumValue {
+    pub name: String,
+    pub order: i64,
+}
+
+/**
+Contains info describing a user defined composite type in a database
+
+# Fields
+- `name`: The name of the composite type.
+- `attributes`: The attributes of the composite type
+*/
+#[derive(Debug)]
+pub struct CompositeType {
+    pub name: String,
+    pub attributes: Vec<Attribute>,
+}
+
+#[derive(Debug)]
+pub struct Attribute {
+    pub name: String,
+    pub data_type: String,
+}
 
 /**
 Contains info describing a table in a database
@@ -13,9 +58,9 @@ Contains info describing a table in a database
 - `columns`: The columns of the table
 */
 #[derive(Debug)]
-pub struct TableInfo {
+pub struct Table {
     pub name: String,
-    pub columns: Vec<ColumnInfo>,
+    pub columns: Vec<Column>,
 }
 
 /**
@@ -33,7 +78,7 @@ Contains info describing a column in a database table.
 - `table_schema`: The schema of the table.
 */
 #[derive(Debug)]
-pub struct ColumnInfo {
+pub struct Column {
     pub name: String,
     pub udt_name: String,
     pub data_type: String,
@@ -45,9 +90,9 @@ pub struct ColumnInfo {
     pub table_schema: String,
 }
 
-impl From<TableColumn> for ColumnInfo {
+impl From<TableColumn> for Column {
     fn from(val: TableColumn) -> Self {
-        ColumnInfo {
+        Column {
             name: val.column_name,
             udt_name: val.udt_name,
             data_type: val.data_type,
@@ -61,17 +106,16 @@ impl From<TableColumn> for ColumnInfo {
     }
 }
 
-pub type RustType = String;
-
 /**
-The `TableInfoProvider` trait defines a common interface for retrieving table column information from a database.
+The `schema::InfoProvider` trait defines a common interface for retrieving table column information from a database.
 
 # Methods
 - `type_name_from`: returns the Rust type name from database column info
-- `get_table_columns`: Asynchronously retrieves a list of `TableColumn` structs representing the columns in the database's tables.
+- `get_table_info`: Asynchronously retrieves a list of `TableColumn` structs representing the columns in the database's tables.
 */
 #[async_trait]
-pub trait TableInfoProvider {
-    fn type_name_from(&self, column: &ColumnInfo) -> rust::Type;
-    async fn get_table_info(&self) -> Result<Vec<TableInfo>, Error>;
+pub trait InfoProvider {
+    fn type_name_from(&self, column: &Column) -> rust::Type;
+    async fn get_schema(&self) -> Result<DatabaseSchema, Error>;
+    async fn get_table_info(&self) -> Result<Vec<Table>, Error>;
 }

@@ -7,8 +7,8 @@ mod utils;
 
 use std::path::Path;
 
-use crate::database::TableInfoProvider;
-use anyhow::{bail, Context, Error};
+use crate::database::InfoProvider;
+use anyhow::{Context, Error};
 use cruet::Inflector;
 use tokio::{
     fs::{self, File},
@@ -81,5 +81,5 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
             .context("failed to write generated source code to file")?;
     }
 
-    bail!("autostruct isn't quite ready yet...");
+    Ok(())
 }

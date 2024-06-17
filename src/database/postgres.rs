@@ -3,17 +3,17 @@ The `postgres` module provides an implementation of the `TableInfoProvider` trai
 */
 
 use crate::{
-    database::TableInfoProvider,
+    database::InfoProvider,
     rust::{self, Type},
 };
-use anyhow::{Context, Error};
+use anyhow::{bail, Context, Error};
 use async_trait::async_trait;
 use sqlx::{PgPool, Pool, Postgres};
 
 use super::{
-    table_column::{Converter, TableColumn},
-    table_info_provider::ColumnInfo,
-    TableInfo,
+    raw_schema::{Converter, TableColumn},
+    schema::{Column, DatabaseSchema},
+    Table,
 };
 
 // A builder for configuring and creating a `Database` connection.
@@ -70,7 +70,7 @@ impl Builder {
     /// # Returns
     ///
     /// A `Result` containing the `Database` instance or an error.
-    pub async fn connect(self, connection_string: &str) -> Result<impl TableInfoProvider, Error> {
+    pub async fn connect(self, connection_string: &str) -> Result<impl InfoProvider, Error> {
         let pool = PgPool::connect(connection_string)
             .await
             .context("failed to connect to postgresql database")?;
@@ -96,14 +96,70 @@ pub struct Database {
 }
 
 #[async_trait]
-impl TableInfoProvider for Database {
+impl InfoProvider for Database {
+    async fn get_schema(&self) -> Result<DatabaseSchema, Error> {
+        bail!("not implemented")
+    }
+
+    fn type_name_from(&self, column: &Column) -> rust::Type {
+        let rust_type = match column.udt_name.as_str() {
+            "bool" | "boolean" => Type::Bool("bool"),
+            "char" => Type::I8("i8"),
+            "smallint" | "smallserial" | "int2" => Type::I16("i16"),
+            "int" | "integer" | "serial" | "int4" => Type::I32("i32"),
+            "bigint" | "bigserial" | "int8" => Type::I64("i64"),
+            "real" | "float4" => Type::F32("f32"),
+            "double precision" | "float8" => Type::F64("f64"),
+            "varchar" | "char(n)" | "text" | "name" | "character varying" | "character"
+            | "citext" | "bpchar" => Type::String("String"),
+            "bytea" => Type::ByteArray("Vec<u8>"),
+            "void" => Type::Void("()"),
+            // assuming [`uuid`](https://crates.io/crates/uuid)
+            "uuid" => Type::UUID("uuid::Uuid"),
+            // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
+            "date" => Type::Date("chrono::NaiveDate"),
+            "time without time zone" | "time with time zone" | "time" => {
+                Type::Time("chrono::NaiveTime")
+            }
+            "timestamp without time zone" | "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
+            "timestamp with time zone" | "timestamptz" => {
+                Type::TimestampWithTz("chrono::DateTime<Utc>")
+            }
+            // assuming [`rust_decimal`](https://crates.io/crates/rust_decimal) to support numeric types
+            "numeric" => Type::Decimal("rust_decimal::Decimal"),
+            // assuming [`ipnetwork`](https://crates.io/crates/ipnetwork)
+            "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
+            // assuming [`bit-vec`](https://crates.io/crates/bit-vec)
+            "bit" | "varbit" | "bit varying" => Type::Bit("bit_vec::BitVec"),
+            // below types are biased towards using the sqlx::postgres::types module
+            // this should be considered for configuration when autostruct explicitly supports
+            // different rust postgres clients
+            "interval" => Type::Interval("PgInterval"),
+            "int4range" => Type::Range(Box::new(Type::I32("i32"))),
+            "int8range" => Type::Range(Box::new(Type::I64("i64"))),
+            "tsrange" => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
+            "tstzrange" => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
+            "daterange" => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
+            "numrange" => Type::Range(Box::new(Type::Decimal("rust_decimal::Decimal"))),
+            "money" => Type::Money("PgMoney"),
+            "ltree" => Type::Tree("PgLTree"),
+            "lquery" => Type::Query("PgLQuery"),
+            pg_type => Type::Custom(pg_type.to_string()),
+        };
+
+        if column.is_nullable {
+            return Type::Option(Box::new(rust_type));
+        }
+        rust_type
+    }
+
     /**
     Retrieves a list of columns for all tables in the PostgreSQL database.
 
     # Returns
     - A `Result` containing a vector of `TableInfo` structs or an error.
     */
-    async fn get_table_info(&self) -> Result<Vec<TableInfo>, Error> {
+    async fn get_table_info(&self) -> Result<Vec<Table>, Error> {
         let excluded_tables = self.excluded_tables.join(",");
         let query = "
     SELECT
@@ -148,58 +204,6 @@ impl TableInfoProvider for Database {
             .to_table_info();
 
         Ok(tables)
-    }
-
-    fn type_name_from(&self, column: &ColumnInfo) -> rust::Type {
-        let rust_type = match column.data_type.as_str() {
-            "bool" | "boolean" => Type::Bool("bool"),
-            "char" => Type::I8("i8"),
-            "smallint" | "smallserial" | "int2" => Type::I16("i16"),
-            "int" | "integer" | "serial" | "int4" => Type::I32("i32"),
-            "bigint" | "bigserial" | "int8" => Type::I64("i64"),
-            "real" | "float4" => Type::F32("f32"),
-            "double precision" | "float8" => Type::F64("f64"),
-            "varchar" | "char(n)" | "text" | "name" | "character varying" | "character"
-            | "citext" => Type::String("String"),
-            "bytea" => Type::ByteArray("Vec<u8>"),
-            "void" => Type::Void("()"),
-            // assuming [`uuid`](https://crates.io/crates/uuid)
-            "uuid" => Type::UUID("uuid::Uuid"),
-            // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
-            "date" => Type::Date("chrono::NaiveDate"),
-            "time without time zone" | "time with time zone" | "time" => {
-                Type::Time("chrono::NaiveTime")
-            }
-            "timestamp without time zone" | "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
-            "timestamp with time zone" | "timestamptz" => {
-                Type::TimestampWithTz("chrono::DateTime<Utc>")
-            }
-            // assuming [`rust_decimal`](https://crates.io/crates/rust_decimal) to support numeric types
-            "numeric" => Type::Decimal("rust_decimal::Decimal"),
-            // assuming [`ipnetwork`](https://crates.io/crates/ipnetwork)
-            "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
-            // assuming [`bit-vec`](https://crates.io/crates/bit-vec)
-            "bit" | "varbit" | "bit varying" => Type::Bit("bit_vec::BitVec"),
-            // below types are biased towards using the sqlx::postgres::types module
-            // this should be considered for configuration when autostruct explicitly supports
-            // different rust postgres clients
-            "interval" => Type::Interval("PgInterval"),
-            "int4range" => Type::Range(Box::new(Type::I32("i32"))),
-            "int8range" => Type::Range(Box::new(Type::I64("i64"))),
-            "tsrange" => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
-            "tstzrange" => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
-            "daterange" => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
-            "numrange" => Type::Range(Box::new(Type::Decimal("rust_decimal::Decimal"))),
-            "money" => Type::Money("PgMoney"),
-            "ltree" => Type::Tree("PgLTree"),
-            "lquery" => Type::Query("PgLQuery"),
-            pg_type => Type::Custom(pg_type.to_string()),
-        };
-
-        if column.is_nullable {
-            return Type::Option(Box::new(rust_type));
-        }
-        rust_type
     }
 
     // fn to_rust_type(pg_type: &str) -> Type {

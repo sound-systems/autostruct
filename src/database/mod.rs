@@ -17,10 +17,11 @@ pub mod mysql;
 pub mod postgres;
 pub mod sqlite;
 
-mod table_column;
+mod convert;
+mod raw_schema;
 
-mod table_info_provider;
-pub use table_info_provider::{TableInfo, TableInfoProvider};
+mod schema;
+pub use schema::{Table, InfoProvider};
 
 use anyhow::{bail, Error};
 

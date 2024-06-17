@@ -3,12 +3,9 @@
 use anyhow::Error;
 use cruet::Inflector;
 
-use crate::database::{TableInfo, TableInfoProvider};
+use crate::database::{InfoProvider, Table};
 
-pub fn code_from(
-    table: &TableInfo,
-    info_provider: &impl TableInfoProvider,
-) -> Result<String, Error> {
+pub fn code_from(table: &Table, info_provider: &impl InfoProvider) -> Result<String, Error> {
     let mut code = String::new();
     code.push_str("#![allow(dead_code)]\n");
     code.push_str(

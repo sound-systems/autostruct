@@ -1,14 +1,28 @@
 use std::{collections::HashMap, mem};
 
-use crate::database::table_info_provider::ColumnInfo;
+use crate::database::schema::Column;
 
-use super::TableInfo;
+use super::Table;
 
 /**
 The `Converter` trait defines a common interface for converting types into a vector of TableInfo
 */
 pub trait Converter {
-    fn to_table_info(self) -> Vec<TableInfo>;
+    fn to_table_info(self) -> Vec<Table>;
+}
+
+#[derive(sqlx::FromRow, Debug)]
+pub struct EnumType {
+    pub name: String,
+    pub value: String,
+    pub sort_order: i64,
+}
+
+#[derive(sqlx::FromRow, Debug)]
+pub struct CompositeType {
+    pub name: String,
+    pub attribute_name: String,
+    pub data_type: String,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -26,8 +40,8 @@ pub struct TableColumn {
 }
 
 impl Converter for Vec<TableColumn> {
-    fn to_table_info(self) -> Vec<TableInfo> {
-        let tables: HashMap<String, Vec<ColumnInfo>> = HashMap::new();
+    fn to_table_info(self) -> Vec<Table> {
+        let tables: HashMap<String, Vec<Column>> = HashMap::new();
         self.into_iter()
             .fold(tables, |mut acc, mut column| {
                 let table_name = mem::take(&mut column.table_name);
@@ -35,7 +49,7 @@ impl Converter for Vec<TableColumn> {
                 acc
             })
             .into_iter()
-            .map(|t| TableInfo {
+            .map(|t| Table {
                 name: t.0,
                 columns: t.1,
             })
