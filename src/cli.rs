@@ -54,7 +54,6 @@ impl TryInto<generator::Arguments> for GenerateArgs {
 
         let args = generator::Arguments {
             target_dir: self.output,
-            database: conn_str.as_str().try_into()?,
             connection_string: conn_str,
             singular_table_names: self.singular,
             exclude_tables: self.exclude,

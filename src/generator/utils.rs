@@ -1,13 +1,17 @@
 use anyhow::{bail, Error};
 
-use crate::database::{self, postgres, Kind, TableInfoProvider};
+use crate::database::{
+    self,
+    postgres::{self},
+    Kind, InfoProvider,
+};
 
-pub async fn setup_database(
-    database: database::Kind,
+pub async fn setup(
+    connection_string: &str,
     exclude_tables: Vec<String>,
-    connection_string: String,
-) -> Result<impl TableInfoProvider, Error> {
-    let db = match database {
+) -> Result<impl InfoProvider, Error> {
+    let database: database::Kind = connection_string.try_into()?;
+    let provider = match database {
         Kind::Postgres => {
             postgres::Builder::new()
                 .exclude(exclude_tables)
@@ -16,5 +20,5 @@ pub async fn setup_database(
         }
         _ => bail!("database is not yet supported"),
     };
-    Ok(db)
+    Ok(provider)
 }

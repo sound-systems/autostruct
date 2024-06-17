@@ -1,14 +1,12 @@
 use std::error::Error;
 
 use anyhow::Context;
+use autostruct::generator;
 use clap::Parser;
 use cli::{Cli, Commands};
 use dotenvy::dotenv;
 
 mod cli;
-mod database;
-mod generator;
-mod rust;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

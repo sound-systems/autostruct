@@ -17,10 +17,11 @@ pub mod mysql;
 pub mod postgres;
 pub mod sqlite;
 
-mod table_column;
+mod convert;
+mod raw_schema;
 
-mod table_info_provider;
-pub use table_info_provider::{TableInfo, TableInfoProvider};
+mod schema;
+pub use schema::{Column, CompositeType, Enum, InfoProvider, Table};
 
 use anyhow::{bail, Error};
 
@@ -41,7 +42,7 @@ impl TryFrom<&str> for Kind {
         let db = if value.starts_with("postgres://") {
             Self::Postgres
         } else {
-            bail!("the database you are trying to connect to is not yet supported")
+            bail!("failed to infer database kind from provided connection string")
         };
 
         Ok(db)
