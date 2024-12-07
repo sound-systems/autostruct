@@ -39,15 +39,26 @@ impl Default for Arguments {
     }
 }
 
-/// Runs the generation process based on the provided CLI arguments.
+/// Executes the code generation process using the provided arguments
 ///
 /// # Arguments
 ///
-/// * `args` - the arguments needed to run the generator
+/// * `args` - Configuration options for code generation including:
+///   - `exclude_tables`: Tables to exclude from generation
+///   - `connection_string`: Database connection string
+///   - `target_dir`: Output directory for generated files
+///   - `singular_table_names`: Whether to use singular form of table names
 ///
 /// # Returns
 ///
-/// A `Result` indicating the success or failure of the operation.
+/// Returns `Ok(())` if code generation succeeds, otherwise returns an `Error`
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - Database connection fails
+/// - Output directory creation fails
+/// - File operations fail during code writing
 pub async fn run(args: Arguments) -> Result<(), Error> {
     let Arguments {
         exclude_tables,

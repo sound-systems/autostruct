@@ -105,13 +105,18 @@ cargo run -- generate -o ./output -d "your_database_connection_string" --databas
 ```
 
 ### Testing
+The project uses integration tests with test containers to verify functionality against real databases. Currently, PostgreSQL integration tests are implemented.
 
-TODO: improve docker testing docs
-For example - test containers need the following setting for Docker Desktop enabled:
-`Allow the default Docker socket to be used (requires password)`
+Integration tests require Docker Desktop to be installed and running. For more information on how to install Docker Desktop, see the [official documentation](https://www.docker.com/products/docker-desktop/).
 
-You can run the tests using:
+To run all tests (unit + integration) it is recommended to the commands provided via the Makefile:
 
 ```sh
-cargo test
+make test.all
+```
+
+For more information on the Makefile commands, run:
+
+```sh
+make help
 ```

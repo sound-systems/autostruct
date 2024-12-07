@@ -215,6 +215,23 @@ impl Database {
 
 #[async_trait]
 impl InfoProvider for Database {
+
+    fn type_name_from(&self, db_type: &str) -> rust::Type {
+        // Handle arrays first
+        if let Some(inner_type) = db_type.strip_prefix('_') {
+            return Type::Vector(Box::new(self.type_name_from(inner_type)));
+        }
+
+        // Use a const lookup table for better maintainability
+        match db_type {
+            t if NUMERIC_TYPES.contains(&t) => map_numeric_type(t),
+            t if TEMPORAL_TYPES.contains(&t) => map_temporal_type(t),
+            t if STRING_TYPES.contains(&t) => Type::String("String"),
+            t if BINARY_TYPES.contains(&t) => Type::ByteArray("Vec<u8>"),
+            t => map_specialized_type(t),
+        }
+    }
+
     async fn get_schema(&self) -> Result<DatabaseSchema, Error> {
         let enumerations = self.get_enums().await?;
         let composite_types = self.get_composite_types().await?;
@@ -226,149 +243,56 @@ impl InfoProvider for Database {
         };
         Ok(schema)
     }
+}
 
-    fn type_name_from(&self, db_type: &str) -> rust::Type {
-        match db_type {
-            "bool" | "boolean" => Type::Bool("bool"),
-            "char" => Type::I8("i8"),
-            "smallint" | "smallserial" | "int2" => Type::I16("i16"),
-            "int" | "integer" | "serial" | "int4" => Type::I32("i32"),
-            "bigint" | "bigserial" | "int8" => Type::I64("i64"),
-            "real" | "float4" => Type::F32("f32"),
-            "double precision" | "float8" => Type::F64("f64"),
-            "varchar" | "char(n)" | "text" | "name" | "character varying" | "character"
-            | "citext" | "bpchar" => Type::String("String"),
-            "bytea" => Type::ByteArray("Vec<u8>"),
-            "void" => Type::Void("()"),
-            // assuming [`uuid`](https://crates.io/crates/uuid)
-            "uuid" => Type::Uuid("uuid::Uuid"),
-            // assuming [`chrono`](https://crates.io/crates/chrono) for time based types
-            "date" => Type::Date("chrono::NaiveDate"),
-            "time without time zone" | "time with time zone" | "time" => {
-                Type::Time("chrono::NaiveTime")
-            }
-            "timestamp without time zone" | "timestamp" => Type::Timestamp("chrono::NaiveDateTime"),
-            "timestamp with time zone" | "timestamptz" => {
-                Type::TimestampWithTz("chrono::DateTime<Utc>")
-            }
-            // assuming [`rust_decimal`](https://crates.io/crates/rust_decimal) to support numeric types
-            "numeric" => Type::Decimal("rust_decimal::Decimal"),
-            // assuming [`ipnetwork`](https://crates.io/crates/ipnetwork)
-            "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
-            // assuming [`bit-vec`](https://crates.io/crates/bit-vec)
-            "bit" | "varbit" | "bit varying" => Type::Bit("bit_vec::BitVec"),
-            // below types are biased towards using the sqlx::postgres::types module
-            // this should be considered for configuration when autostruct explicitly supports
-            // different rust postgres clients
-            "interval" => Type::Interval("PgInterval"),
-            "int4range" => Type::Range(Box::new(Type::I32("i32"))),
-            "int8range" => Type::Range(Box::new(Type::I64("i64"))),
-            "tsrange" => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
-            "tstzrange" => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
-            "daterange" => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
-            "numrange" => Type::Range(Box::new(Type::Decimal("rust_decimal::Decimal"))),
-            "money" => Type::Money("PgMoney"),
-            "ltree" => Type::Tree("PgLTree"),
-            "lquery" => Type::Query("PgLQuery"),
-            pg_type => Type::Custom(pg_type.to_string()),
-        }
+// Constants for type categorization
+const NUMERIC_TYPES: &[&str] = &[
+    "bool", "boolean", "smallint", "smallserial", "int2", "int", "integer",
+    "serial", "int4", "bigint", "bigserial", "int8", "numeric", "decimal",
+    "real", "float4", "double precision", "float8",
+];
+
+const TEMPORAL_TYPES: &[&str] = &[
+    "date", "time", "time without time zone", "timestamp",
+    "timestamp without time zone", "timestamp with time zone", "timestamptz",
+];
+
+const STRING_TYPES: &[&str] = &[
+    "varchar", "text", "name", "character varying", "character", "citext",
+    "bpchar", "xml",
+];
+
+const BINARY_TYPES: &[&str] = &["bytea"];
+
+fn map_numeric_type(typ: &str) -> rust::Type {
+    match typ {
+        "bool" | "boolean" => Type::Bool("bool"),
+        "smallint" | "smallserial" | "int2" => Type::I16("i16"),
+        "int" | "integer" | "serial" | "int4" => Type::I32("i32"),
+        "bigint" | "bigserial" | "int8" => Type::I64("i64"),
+        "numeric" | "decimal" => Type::Decimal("rust_decimal::Decimal"),
+        "real" | "float4" => Type::F32("f32"),
+        "double precision" | "float8" => Type::F64("f64"),
+        _ => unreachable!("invalid numeric type"),
     }
+}
 
-    // fn to_rust_type(pg_type: &str) -> Type {
-    //     match pg_type {
-    //          "bool" => Type::Bool,
-    //          "bytea" => Type::String,
-    //          "char" => Type::String,
-    //          "name" => Type::String,
-    //          "int8" => Type::String,
-    //          "int2" => Type::String,
-    //          "int4" => Type::String,
-    //          "text" => Type::String,
-    //          "oid" => Type::String,
-    //          "json" => Type::String,
-    //          "_json" => Type::String,
-    //          "point" => Type::String,
-    //          "lseg" => Type::String,
-    //          "path" => Type::String,
-    //          "box" => Type::String,
-    //          "polygon" => Type::String,
-    //          "line" => Type::String,
-    //          "_line" => Type::String,
-    //          "cidr" => Type::String,
-    //          "_cidr" => Type::String,
-    //          "float4" => Type::String,
-    //          "float8" => Type::String,
-    //          "unknown" => Type::String,
-    //          "circle" => Type::String,
-    //          "_circle" => Type::String,
-    //          "macaddr8" => Type::String,
-    //          "_macaddr8" => Type::String,
-    //          "macaddr" => Type::String,
-    //          "inet" => Type::String,
-    //          "_bool" => Type::String,
-    //          "_bytea" => Type::String,
-    //          "_char" => Type::String,
-    //          "_name" => Type::String,
-    //          "_int2" => Type::String,
-    //          "_int4" => Type::String,
-    //          "_text" => Type::String,
-    //          "_bpchar" => Type::String,
-    //          "_varchar" => Type::String,
-    //          "_int8" => Type::String,
-    //          "_point" => Type::String,
-    //          "_lseg" => Type::String,
-    //          "_path" => Type::String,
-    //          "_box" => Type::String,
-    //          "_float4" => Type::String,
-    //          "_float8" => Type::String,
-    //          "_polygon" => Type::String,
-    //          "_oid" => Type::String,
-    //          "_macaddr" => Type::String,
-    //          "_inet" => Type::String,
-    //          "bpchar" => Type::String,
-    //          "varchar" => Type::String,
-    //          "date" => Type::String,
-    //          "time" => Type::String,
-    //          "timestamp" => Type::String,
-    //          "_timestamp" => Type::String,
-    //          "_date" => Type::String,
-    //          "_time" => Type::String,
-    //          "timestamptz" => Type::String,
-    //          "_timestamptz" => Type::String,
-    //          "interval" => Type::String,
-    //          "_interval" => Type::String,
-    //          "_numeric" => Type::String,
-    //          "timetz" => Type::String,
-    //          "_timetz" => Type::String,
-    //          "bit" => Type::String,
-    //          "_bit" => Type::String,
-    //          "varbit" => Type::String,
-    //          "_varbit" => Type::String,
-    //          "numeric" => Type::String,
-    //          "record" => Type::String,
-    //          "_record" => Type::String,
-    //          "uuid" => Type::String,
-    //          "_uuid" => Type::String,
-    //          "jsonb" => Type::String,
-    //          "_jsonb" => Type::String,
-    //          "int4range" => Type::String,
-    //          "_int4range" => Type::String,
-    //          "numrange" => Type::String,
-    //          "_numrange" => Type::String,
-    //          "tsrange" => Type::String,
-    //          "_tsrange" => Type::String,
-    //          "tstzrange" => Type::String,
-    //          "_tstzrange" => Type::String,
-    //          "daterange" => Type::String,
-    //          "_daterange" => Type::String,
-    //          "int8range" => Type::String,
-    //          "_int8range" => Type::String,
-    //          "jsonpath" => Type::String,
-    //          "_jsonpath" => Type::String,
-    //          "money" => Type::String,
-    //          "_money" => Type::String,
-    //          "void" => Type::String,
-    //          _ => Type::Custom(pg_type.to_string())
-    //     }
-    // }
+fn map_temporal_type(typ: &str) -> rust::Type {
+    match typ {
+        "date" => Type::Date("chrono::NaiveDate"),
+        "time" | "time without time zone" => Type::Time("chrono::NaiveTime"),
+        "timestamp" | "timestamp without time zone" => Type::Timestamp("chrono::NaiveDateTime"),
+        "timestamp with time zone" | "timestamptz" => Type::TimestampWithTz("chrono::DateTime<Utc>"),
+        _ => unreachable!("invalid temporal type"),
+    }
+}
+
+fn map_specialized_type(typ: &str) -> rust::Type {
+    match typ {
+        "uuid" => Type::Uuid("uuid::Uuid"),
+        "json" | "jsonb" => Type::Json("serde_json::Value"),
+        "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
+        // Add other specialized types here
+        other => Type::Custom(other.to_string()),
+    }
 }

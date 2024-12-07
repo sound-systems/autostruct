@@ -32,3 +32,8 @@ test.postgres:
 
 ## executes integration tests against all supported databases
 test.all: test.postgres
+
+## cleans the project
+clean:
+	cargo clean
+	rm -rf ./autostruct
