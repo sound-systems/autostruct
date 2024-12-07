@@ -222,7 +222,6 @@ impl InfoProvider for Database {
             return Type::Vector(Box::new(self.type_name_from(inner_type)));
         }
 
-        // Use a const lookup table for better maintainability
         match db_type {
             t if NUMERIC_TYPES.contains(&t) => map_numeric_type(t),
             t if TEMPORAL_TYPES.contains(&t) => map_temporal_type(t),
@@ -245,6 +244,7 @@ impl InfoProvider for Database {
     }
 }
 
+
 // Constants for type categorization
 const NUMERIC_TYPES: &[&str] = &[
     "bool", "boolean", "smallint", "smallserial", "int2", "int", "integer",
@@ -259,7 +259,7 @@ const TEMPORAL_TYPES: &[&str] = &[
 
 const STRING_TYPES: &[&str] = &[
     "varchar", "text", "name", "character varying", "character", "citext",
-    "bpchar", "xml",
+    "bpchar", "bit", "varbit",
 ];
 
 const BINARY_TYPES: &[&str] = &["bytea"];
@@ -292,6 +292,7 @@ fn map_specialized_type(typ: &str) -> rust::Type {
         "uuid" => Type::Uuid("uuid::Uuid"),
         "json" | "jsonb" => Type::Json("serde_json::Value"),
         "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
+        "xml" => Type::Xml("String"),
         // Add other specialized types here
         other => Type::Custom(other.to_string()),
     }
