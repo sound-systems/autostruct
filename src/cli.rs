@@ -41,6 +41,10 @@ pub struct GenerateArgs {
     /// Exclude table names from being generated into structs
     #[arg(long)]
     pub exclude: Vec<String>,
+
+    /// Include serde derive attribute on generated structs
+    #[arg(long)]
+    pub serde: bool,
 }
 
 impl TryInto<generator::Arguments> for GenerateArgs {
@@ -57,6 +61,7 @@ impl TryInto<generator::Arguments> for GenerateArgs {
             connection_string: conn_str,
             singular_table_names: self.singular,
             exclude_tables: self.exclude,
+            include_serde: self.serde,
         };
 
         Ok(args)

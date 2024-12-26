@@ -7,9 +7,9 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
-
 use super::{
-    code::{self, Options}, utils,
+    code::{self, Options},
+    utils,
 };
 
 pub struct Arguments {
@@ -17,6 +17,7 @@ pub struct Arguments {
     pub exclude_tables: Vec<String>,
     pub connection_string: String,
     pub singular_table_names: bool,
+    pub include_serde: bool,
 }
 
 impl Arguments {
@@ -35,6 +36,7 @@ impl Default for Arguments {
             exclude_tables: Default::default(),
             connection_string: Default::default(),
             singular_table_names: false,
+            include_serde: false,
         }
     }
 }
@@ -48,6 +50,7 @@ impl Default for Arguments {
 ///   - `connection_string`: Database connection string
 ///   - `target_dir`: Output directory for generated files
 ///   - `singular_table_names`: Whether to use singular form of table names
+///   - `include_serde`: Whether to include #[derive(serde::Deserialize)] on generated structs
 ///
 /// # Returns
 ///
@@ -65,6 +68,7 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
         connection_string,
         target_dir,
         singular_table_names,
+        include_serde,
     } = args;
 
     let provider = utils::setup(&connection_string, exclude_tables).await?;
@@ -92,6 +96,9 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
         code.push_str(
             "// Generated with autostruct\n// https://github.com/sound-systems/autostruct\n\n",
         );
+        if include_serde {
+            code.push_str("#[derive(serde::Deserialize)]\n");
+        }
         code.push_str(&snippet.code);
         let mut file = File::create(source_file)
             .await
