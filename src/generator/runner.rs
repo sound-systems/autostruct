@@ -97,7 +97,8 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
             "// Generated with autostruct\n// https://github.com/sound-systems/autostruct\n\n",
         );
         if include_serde {
-            code.push_str("#[derive(serde::Deserialize)]\n");
+            code.push_str("use serde::{Deserialize, Serialize};\n\n");
+            code.push_str("#[derive(Deserialize, Serialize)]\n");
         }
         code.push_str(&snippet.code);
         let mut file = File::create(source_file)
