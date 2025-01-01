@@ -282,7 +282,7 @@ fn map_temporal_type(typ: &str) -> rust::Type {
         "date" => Type::Date("chrono::NaiveDate"),
         "time" | "time without time zone" => Type::Time("chrono::NaiveTime"),
         "timestamp" | "timestamp without time zone" => Type::Timestamp("chrono::NaiveDateTime"),
-        "timestamp with time zone" | "timestamptz" => Type::TimestampWithTz("chrono::DateTime<Utc>"),
+        "timestamp with time zone" | "timestamptz" => Type::TimestampWithTz("chrono::DateTime<chrono::Utc>"),
         _ => unreachable!("invalid temporal type"),
     }
 }
