@@ -7,9 +7,9 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
-
 use super::{
-    code::{self, Options}, utils,
+    code::{self, Options},
+    utils,
 };
 
 pub struct Arguments {
@@ -17,6 +17,8 @@ pub struct Arguments {
     pub exclude_tables: Vec<String>,
     pub connection_string: String,
     pub singular_table_names: bool,
+    pub use_statements: Vec<String>,
+    pub derive_statements: Vec<String>,
 }
 
 impl Arguments {
@@ -35,6 +37,8 @@ impl Default for Arguments {
             exclude_tables: Default::default(),
             connection_string: Default::default(),
             singular_table_names: false,
+            use_statements: Default::default(),
+            derive_statements: Default::default(),
         }
     }
 }
@@ -65,6 +69,8 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
         connection_string,
         target_dir,
         singular_table_names,
+        use_statements,
+        derive_statements,
     } = args;
 
     let provider = utils::setup(&connection_string, exclude_tables).await?;
@@ -92,6 +98,21 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
         code.push_str(
             "// Generated with autostruct\n// https://github.com/sound-systems/autostruct\n\n",
         );
+        for (i, use_statement) in use_statements.iter().enumerate() {
+            code.push_str(&format!("{use_statement}\n"));
+            if i == use_statements.len() - 1 {
+                code.push_str("\n");
+            }
+        }
+        for (i, derive_statement) in derive_statements.iter().enumerate() {
+            if i == 0 {
+                code.push_str("#[derive(");
+            }
+            code.push_str(&derive_statement);
+            if i == derive_statements.len() - 1 {
+                code.push_str(")]\n");
+            }
+        }
         code.push_str(&snippet.code);
         let mut file = File::create(source_file)
             .await
