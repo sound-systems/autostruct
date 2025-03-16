@@ -280,10 +280,10 @@ fn map_numeric_type(typ: &str) -> rust::Type {
         "smallint" | "smallserial" | "int2" => Type::I16("i16"),
         "int" | "integer" | "serial" | "int4" => Type::I32("i32"),
         "bigint" | "bigserial" | "int8" => Type::I64("i64"),
-        "numeric" | "decimal" => Type::Decimal("rust_decimal::Decimal"),
+        "numeric" | "decimal" => Type::Decimal("Decimal"),
         "real" | "float4" => Type::F32("f32"),
         "double precision" | "float8" => Type::F64("f64"),
-        "money" => Type::Money("rust_decimal::Decimal"),
+        "money" => Type::Money("Decimal"),
         _ => unreachable!("invalid numeric type"),
     }
 }
@@ -318,11 +318,11 @@ fn map_specialized_type(typ: &str) -> rust::Type {
         // Handle range types
         t if t.starts_with("int4range") => Type::Range(Box::new(Type::I32("i32"))),
         t if t.starts_with("int8range") => Type::Range(Box::new(Type::I64("i64"))),
-        t if t.starts_with("numrange") => Type::Range(Box::new(Type::Decimal("rust_decimal::Decimal"))),
+        t if t.starts_with("numrange") => Type::Range(Box::new(Type::Decimal("Decimal"))),
         t if t.starts_with("tsrange") => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
         t if t.starts_with("tstzrange") => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
         t if t.starts_with("daterange") => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
         // For any other type, treat it as a custom type
-        other => Type::Custom(other.to_string()),
+        other => Type::Custom(other.to_string().to_pascal_case()),
     }
 }

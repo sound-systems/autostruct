@@ -145,7 +145,7 @@ impl Generator {
                 self.add_type_imports(snippet, inner);
             },
             Type::Custom(name) => {
-                // If it's a custom type from our schema, add it as a dependency
+                // If it's a custom type from defined schema, add it as a dependency
                 if !name.contains("::") {
                     snippet.add_dependency(name);
                 } else if name.starts_with("postgres_types::") {
