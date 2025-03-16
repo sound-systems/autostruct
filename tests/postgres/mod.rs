@@ -3,8 +3,8 @@
 use anyhow::{Context, Error};
 use autostruct::generator;
 use sqlx::{migrate::Migrator, PgPool, Row};
+use std::{fs, path::PathBuf};
 use testcontainers_modules::{postgres::Postgres, testcontainers::runners::AsyncRunner};
-use std::{path::PathBuf, fs};
 
 static MIGRATOR: Migrator = sqlx::migrate!("tests/postgres/migrations");
 
@@ -59,7 +59,7 @@ async fn test_basic_types_deserialization(pool: &PgPool) -> Result<(), Error> {
     // Insert test data
     sqlx::query(
         "INSERT INTO table_basic_types (integer_column, bigint_column, double_precision_column) 
-         VALUES ($1, $2, $3)"
+         VALUES ($1, $2, $3)",
     )
     .bind(42)
     .bind(9999i64)
@@ -82,7 +82,7 @@ async fn test_basic_types_deserialization(pool: &PgPool) -> Result<(), Error> {
     // Load and compile the generated code
     let generated_code = fs::read_to_string("./autostructs/table_basic_type.rs")
         .context("Failed to read generated code")?;
-    
+
     // Print the generated code for debugging
     println!("Generated code:\n{}", generated_code);
 
