@@ -7,16 +7,28 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
-
 use super::{
     code::{self, Options}, utils,
 };
+
+#[derive(Clone, Debug)]
+pub enum Framework {
+    None,
+    Sqlx,
+}
+
+impl Default for Framework {
+    fn default() -> Self {
+        Self::None
+    }
+}
 
 pub struct Arguments {
     pub target_dir: String,
     pub exclude_tables: Vec<String>,
     pub connection_string: String,
     pub singular_table_names: bool,
+    pub framework: Framework,
 }
 
 impl Arguments {
@@ -35,6 +47,7 @@ impl Default for Arguments {
             exclude_tables: Default::default(),
             connection_string: Default::default(),
             singular_table_names: false,
+            framework: Framework::None,
         }
     }
 }
@@ -65,12 +78,14 @@ pub async fn run(args: Arguments) -> Result<(), Error> {
         connection_string,
         target_dir,
         singular_table_names,
+        framework,
     } = args;
 
     let provider = utils::setup(&connection_string, exclude_tables).await?;
     let generator = code::Generator::new(
         Options {
             singular: singular_table_names,
+            framework,
         },
         Box::new(provider),
     );

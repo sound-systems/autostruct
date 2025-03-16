@@ -1,29 +1,41 @@
 use crate::{database, rust::Type};
+use crate::database::InfoProvider;
 use anyhow::Error;
 use cruet::Inflector;
 use std::collections::HashSet;
+
+use super::runner::Framework;
 
 /**
 Contains fields that indicate formatting options that should be applied to the generated code
 
 # Fields
 - `singular`: specifies with the generated Rust structs name should be the singular form the provided tables
+- `framework`: specifies the framework to be used for generating the code
 */
+#[derive(Debug)]
 pub struct Options {
     pub singular: bool,
+    pub framework: Framework,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            singular: false,
+            framework: Framework::None,
+        }
+    }
 }
 
 pub struct Generator {
-    formatting: Options,
-    provider: Box<dyn database::InfoProvider>,
+    options: Options,
+    provider: Box<dyn InfoProvider>,
 }
 
 impl Generator {
-    pub fn new(formatting: Options, provider: Box<dyn database::InfoProvider>) -> Self {
-        Generator {
-            formatting,
-            provider,
-        }
+    pub fn new(options: Options, provider: Box<dyn InfoProvider>) -> Self {
+        Self { options, provider }
     }
 
     pub async fn generate_code(&self) -> Result<Vec<Snippet>, Error> {
@@ -70,7 +82,17 @@ impl Generator {
                 let table_name = self.format_name(&composite.name);
                 let mut snippet = Snippet::new(table_name.clone());
                 
-                snippet.code.push_str("#[derive(Debug, Clone)]\n");
+                // Add framework-specific derives
+                match self.options.framework {
+                    Framework::None => {
+                        snippet.code.push_str("#[derive(Debug, Clone)]\n");
+                    }
+                    Framework::Sqlx => {
+                        snippet.code.push_str("#[derive(Debug, Clone, sqlx::FromRow)]\n");
+                        snippet.add_import("sqlx::FromRow");
+                    }
+                }
+
                 snippet.code.push_str(&format!("pub struct {} {{\n", table_name.to_pascal_case()));
 
                 for attr in &composite.attributes {
@@ -78,6 +100,14 @@ impl Generator {
                     self.add_type_imports(&mut snippet, &rust_type);
                     
                     let field_name = attr.name.to_snake_case();
+                    
+                    // For SQLx framework, add nullable attribute if the type is an Option
+                    if let Framework::Sqlx = self.options.framework {
+                        if let Type::Option(_) = rust_type {
+                            snippet.code.push_str("    #[sqlx(nullable)]\n");
+                        }
+                    }
+                    
                     let struct_field = format!("    pub {field_name}: {rust_type},\n");
                     snippet.code.push_str(&struct_field);
                 }
@@ -95,7 +125,17 @@ impl Generator {
                 let table_name = self.format_name(&table.name);
                 let mut snippet = Snippet::new(table_name.clone());
                 
-                snippet.code.push_str("#[derive(Debug, Clone)]\n");
+                // Add framework-specific derives
+                match self.options.framework {
+                    Framework::None => {
+                        snippet.code.push_str("#[derive(Debug, Clone)]\n");
+                    }
+                    Framework::Sqlx => {
+                        snippet.code.push_str("#[derive(Debug, Clone, sqlx::FromRow)]\n");
+                        snippet.add_import("sqlx::FromRow");
+                    }
+                }
+
                 snippet.code.push_str(&format!("pub struct {} {{\n", table_name.to_pascal_case()));
 
                 for column in &table.columns {
@@ -114,6 +154,14 @@ impl Generator {
                     self.add_type_imports(&mut snippet, &rust_type);
                     
                     let field_name = column.name.to_snake_case();
+                    
+                    // Add framework-specific field attributes
+                    if let Framework::Sqlx = self.options.framework {
+                        if column.is_nullable {
+                            snippet.code.push_str("    #[sqlx(nullable)]\n");
+                        }
+                    }
+                    
                     let struct_field = format!("    pub {field_name}: {rust_type},\n");
                     snippet.code.push_str(&struct_field);
                 }
@@ -159,7 +207,7 @@ impl Generator {
     }
 
     fn format_name(&self, name: &str) -> String {
-        if self.formatting.singular {
+        if self.options.singular {
             name.to_singular()
         } else {
             name.to_string()
