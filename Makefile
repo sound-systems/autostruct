@@ -34,6 +34,10 @@ test.postgres:
 test.all: test.postgres
 
 ## cleans the project
-clean:
+clean.all:
 	cargo clean
-	rm -rf ./autostruct
+	rm -rf ./autostructs
+
+## cleans generated files created during a test run
+clean.testoutput:
+	rm -rf ./autostructs
