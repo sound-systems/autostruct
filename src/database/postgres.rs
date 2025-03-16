@@ -8,6 +8,7 @@ use crate::{
 };
 use anyhow::{Context, Error};
 use async_trait::async_trait;
+use cruet::Inflector;
 use sqlx::{PgPool, Pool, Postgres};
 
 use super::{
@@ -249,20 +250,29 @@ impl InfoProvider for Database {
 const NUMERIC_TYPES: &[&str] = &[
     "bool", "boolean", "smallint", "smallserial", "int2", "int", "integer",
     "serial", "int4", "bigint", "bigserial", "int8", "numeric", "decimal",
-    "real", "float4", "double precision", "float8",
+    "real", "float4", "double precision", "float8", "money",
 ];
 
 const TEMPORAL_TYPES: &[&str] = &[
     "date", "time", "time without time zone", "timestamp",
     "timestamp without time zone", "timestamp with time zone", "timestamptz",
+    "interval",
 ];
 
 const STRING_TYPES: &[&str] = &[
     "varchar", "text", "name", "character varying", "character", "citext",
-    "bpchar", "bit", "varbit",
+    "bpchar", "bit", "varbit", "char", "uuid",
 ];
 
-const BINARY_TYPES: &[&str] = &["bytea"];
+const BINARY_TYPES: &[&str] = &["bytea", "bit varying"];
+
+const NETWORK_TYPES: &[&str] = &["inet", "cidr", "macaddr", "macaddr8"];
+
+const JSON_TYPES: &[&str] = &["json", "jsonb"];
+
+const GEO_TYPES: &[&str] = &["point", "line", "lseg", "box", "path", "polygon", "circle"];
+
+const TEXT_SEARCH_TYPES: &[&str] = &["tsquery", "tsvector"];
 
 fn map_numeric_type(typ: &str) -> rust::Type {
     match typ {
@@ -273,6 +283,7 @@ fn map_numeric_type(typ: &str) -> rust::Type {
         "numeric" | "decimal" => Type::Decimal("rust_decimal::Decimal"),
         "real" | "float4" => Type::F32("f32"),
         "double precision" | "float8" => Type::F64("f64"),
+        "money" => Type::Money("rust_decimal::Decimal"),
         _ => unreachable!("invalid numeric type"),
     }
 }
@@ -283,17 +294,35 @@ fn map_temporal_type(typ: &str) -> rust::Type {
         "time" | "time without time zone" => Type::Time("chrono::NaiveTime"),
         "timestamp" | "timestamp without time zone" => Type::Timestamp("chrono::NaiveDateTime"),
         "timestamp with time zone" | "timestamptz" => Type::TimestampWithTz("chrono::DateTime<Utc>"),
+        "interval" => Type::Interval("chrono::Duration"),
         _ => unreachable!("invalid temporal type"),
     }
 }
 
 fn map_specialized_type(typ: &str) -> rust::Type {
     match typ {
-        "uuid" => Type::Uuid("uuid::Uuid"),
-        "json" | "jsonb" => Type::Json("serde_json::Value"),
-        "inet" | "cidr" => Type::IpNetwork("ipnetwork::IpNetwork"),
+        t if NETWORK_TYPES.contains(&t) => Type::IpNetwork("ipnetwork::IpNetwork"),
+        t if JSON_TYPES.contains(&t) => Type::Json("serde_json::Value"),
+        t if GEO_TYPES.contains(&t) => Type::Custom(format!("postgis::{}", t.to_pascal_case())),
+        t if TEXT_SEARCH_TYPES.contains(&t) => Type::Custom(format!("postgres_types::{}", t.to_pascal_case())),
         "xml" => Type::Xml("String"),
-        // Add other specialized types here
+        "uuid" => Type::Uuid("uuid::Uuid"),
+        "hstore" => Type::Custom("std::collections::HashMap<String, Option<String>>".to_string()),
+        "ltree" => Type::Tree("postgres_types::LTree"),
+        "void" => Type::Void("()"),
+        // Handle array types
+        t if t.starts_with('_') => {
+            let inner_type = map_specialized_type(&t[1..]);
+            Type::Vector(Box::new(inner_type))
+        }
+        // Handle range types
+        t if t.starts_with("int4range") => Type::Range(Box::new(Type::I32("i32"))),
+        t if t.starts_with("int8range") => Type::Range(Box::new(Type::I64("i64"))),
+        t if t.starts_with("numrange") => Type::Range(Box::new(Type::Decimal("rust_decimal::Decimal"))),
+        t if t.starts_with("tsrange") => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
+        t if t.starts_with("tstzrange") => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
+        t if t.starts_with("daterange") => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
+        // For any other type, treat it as a custom type
         other => Type::Custom(other.to_string()),
     }
 }
