@@ -26,6 +26,12 @@ pub struct Builder {
     excluded_tables: Vec<String>,
 }
 
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Builder {
     /// Creates a new `Builder` instance.
     pub fn new() -> Self {
