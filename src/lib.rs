@@ -1,3 +1,4 @@
-mod database;
+pub mod cli;
+pub mod database;
 pub mod generator;
-mod rust;
+pub mod rust;

@@ -1,7 +1,19 @@
 use anyhow::bail;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::generator::{self};
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum Framework {
+    None,
+    Sqlx,
+}
+
+impl Default for Framework {
+    fn default() -> Self {
+        Self::None
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "autostruct")]
@@ -41,6 +53,10 @@ pub struct GenerateArgs {
     /// Exclude table names from being generated into structs
     #[arg(long)]
     pub exclude: Vec<String>,
+
+    /// Specifies which framework-specific code to generate
+    #[arg(long, value_enum, default_value_t = Framework::None)]
+    pub framework: Framework,
 }
 
 impl TryInto<generator::Arguments> for GenerateArgs {
@@ -57,6 +73,10 @@ impl TryInto<generator::Arguments> for GenerateArgs {
             connection_string: conn_str,
             singular_table_names: self.singular,
             exclude_tables: self.exclude,
+            framework: match self.framework {
+                Framework::None => generator::Framework::None,
+                Framework::Sqlx => generator::Framework::Sqlx,
+            },
         };
 
         Ok(args)
