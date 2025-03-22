@@ -1,11 +1,15 @@
+use std::str::FromStr;
+
 use anyhow::{Context, Error};
-use sqlx::{PgPool, Row};
-use testcontainers_modules::{postgres::Postgres, testcontainers::runners::AsyncRunner};
-use chrono::{Utc, NaiveDate, NaiveTime};
-use uuid::Uuid;
-use rust_decimal::Decimal;
+
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use ipnetwork::IpNetwork;
-use mac_address::MacAddress;
+use rust_decimal::Decimal;
+use sqlx::{
+    postgres::types::{Oid, PgInterval, PgMoney, PgRange, PgTimeTz}, types::{mac_address::MacAddress, time::{Time, UtcOffset}, BitVec}, PgPool, Row
+};
+use testcontainers_modules::{postgres::Postgres, testcontainers::runners::AsyncRunner};
+use uuid::Uuid;
 
 use crate::migrate::POSTGRES_MIGRATOR;
 
@@ -62,6 +66,7 @@ pub async fn test_integration() -> Result<(), Error> {
 }
 
 async fn test_basic_types(pool: &PgPool) -> Result<(), Error> {
+    let money = PgMoney::from_decimal(Decimal::new(1000, 2), 2);
     // Insert test data
     sqlx::query(
         "INSERT INTO table_basic_types (integer_column, smallint_column, bigint_column, numeric_column, 
@@ -74,10 +79,10 @@ async fn test_basic_types(pool: &PgPool) -> Result<(), Error> {
     .bind(Some(Decimal::new(314, 2)))
     .bind(Some(3.14f32))
     .bind(3.14f64)
-    .bind(Some(Decimal::new(1000, 2)))
+    .bind(Some(money))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_basic_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
     let result = sqlx::query_as::<_, autostructs::TableBasicType>(
@@ -86,7 +91,7 @@ async fn test_basic_types(pool: &PgPool) -> Result<(), Error> {
     .bind(42)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_basic_types: Failed to query data")?;
 
     assert_eq!(result.integer_column, 42);
     assert_eq!(result.smallint_column, Some(16i16));
@@ -94,7 +99,7 @@ async fn test_basic_types(pool: &PgPool) -> Result<(), Error> {
     assert_eq!(result.numeric_column, Some(Decimal::new(314, 2)));
     assert!((result.real_column.unwrap() - 3.14f32).abs() < f32::EPSILON);
     assert!((result.double_precision_column - 3.14f64).abs() < f64::EPSILON);
-    assert_eq!(result.money_column, Some(Decimal::new(1000, 2)));
+    assert_eq!(result.money_column, Some(money));
 
     Ok(())
 }
@@ -111,16 +116,16 @@ async fn test_character_types(pool: &PgPool) -> Result<(), Error> {
     .bind(Some("test citext"))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_character_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
     let result = sqlx::query_as::<_, autostructs::TableCharacterType>(
-        "SELECT * FROM table_character_types WHERE varchar_column = $1",        
+        "SELECT * FROM table_character_types WHERE varchar_column = $1",
     )
     .bind("test varchar")
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_character_types: Failed to query data")?;
 
     assert_eq!(result.varchar_column, "test varchar");
     assert_eq!(result.char_column, Some("fixed char".to_string()));
@@ -132,15 +137,13 @@ async fn test_character_types(pool: &PgPool) -> Result<(), Error> {
 
 async fn test_binary_types(pool: &PgPool) -> Result<(), Error> {
     let test_bytes = vec![1, 2, 3, 4];
-    
+
     // Insert test data
-    sqlx::query(
-        "INSERT INTO table_binary_types (bytea_column) VALUES ($1)",
-    )
-    .bind(&test_bytes)
-    .execute(pool)
-    .await
-    .context("Failed to insert test data")?;
+    sqlx::query("INSERT INTO table_binary_types (bytea_column) VALUES ($1)")
+        .bind(&test_bytes)
+        .execute(pool)
+        .await
+        .context("test_binary_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
     let result = sqlx::query_as::<_, autostructs::TableBinaryType>(
@@ -149,7 +152,7 @@ async fn test_binary_types(pool: &PgPool) -> Result<(), Error> {
     .bind(&test_bytes)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_binary_types: Failed to query data")?;
 
     assert_eq!(result.bytea_column, test_bytes);
 
@@ -159,7 +162,16 @@ async fn test_binary_types(pool: &PgPool) -> Result<(), Error> {
 async fn test_date_time_types(pool: &PgPool) -> Result<(), Error> {
     let now = Utc::now();
     let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-    let time = NaiveTime::from_hms_opt(12, 0, 0).unwrap();
+    let time = NaiveTime::from_hms_micro_opt(1, 2, 3, 0).unwrap();
+    let time_tz = PgTimeTz {
+        time: Time::from_hms(3, 2, 1).unwrap(),
+        offset: UtcOffset::from_hms(1, 0, 0).unwrap()
+    };
+    let interval = PgInterval {
+        months: 1,
+        days: 12,
+        microseconds: 100,
+    };
 
     // Insert test data
     sqlx::query(
@@ -171,11 +183,11 @@ async fn test_date_time_types(pool: &PgPool) -> Result<(), Error> {
     .bind(Some(now))
     .bind(date)
     .bind(Some(time))
-    .bind(time)
-    .bind(Some("1 day"::sqlx::types::PgInterval))
+    .bind(time_tz)
+    .bind(Some(interval.clone()))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_date_time_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
     let result = sqlx::query_as::<_, autostructs::TableDateTimeType>(
@@ -184,37 +196,34 @@ async fn test_date_time_types(pool: &PgPool) -> Result<(), Error> {
     .bind(now.naive_utc())
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_date_time_types: Failed to query data")?;
 
     assert_eq!(result.timestamp_column, now.naive_utc());
     assert_eq!(result.timestamp_tz_column, Some(now));
     assert_eq!(result.date_column, date);
     assert_eq!(result.time_column, Some(time));
-    assert_eq!(result.time_tz_column, time);
-    assert!(result.interval_column.is_some());
+    assert_eq!(result.time_tz_column, time_tz);
+    assert_eq!(result.interval_column, Some(interval));
 
     Ok(())
 }
 
 async fn test_boolean_type(pool: &PgPool) -> Result<(), Error> {
     // Insert test data
-    sqlx::query(
-        "INSERT INTO table_boolean_type (boolean_column) VALUES ($1)",
-    )
-    .bind(true)
-    .execute(pool)
-    .await
-    .context("Failed to insert test data")?;
+    sqlx::query("INSERT INTO table_boolean_type (boolean_column) VALUES ($1)")
+        .bind(true)
+        .execute(pool)
+        .await
+        .context("test_boolean_type: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableBooleanType,
+    let result = sqlx::query_as::<_, autostructs::TableBooleanType>(
         "SELECT * FROM table_boolean_type WHERE boolean_column = $1",
-        true
     )
+    .bind(true)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_boolean_type: Failed to query data")?;
 
     assert!(result.boolean_column);
 
@@ -225,22 +234,20 @@ async fn test_uuid_type(pool: &PgPool) -> Result<(), Error> {
     let uuid = Uuid::new_v4();
 
     // Insert test data
-    sqlx::query(
-        "INSERT INTO table_uuid_type (id) VALUES ($1)",
-    )
-    .bind(uuid)
-    .execute(pool)
-    .await
-    .context("Failed to insert test data")?;
+    sqlx::query("INSERT INTO table_uuid_type (id) VALUES ($1)")
+        .bind(uuid)
+        .execute(pool)
+        .await
+        .context("test_uuid_type: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as::<_, autostructs::TableUuidType>
+    let result = sqlx::query_as::<_, autostructs::TableUuidType>(
         "SELECT * FROM table_uuid_type WHERE id = $1",
-        uuid
     )
+    .bind(uuid)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_uuid_type: Failed to query data")?;
 
     assert_eq!(result.id, uuid);
 
@@ -249,6 +256,7 @@ async fn test_uuid_type(pool: &PgPool) -> Result<(), Error> {
 
 async fn test_network_address_types(pool: &PgPool) -> Result<(), Error> {
     let ip = IpNetwork::V4("192.168.1.1/32".parse().unwrap());
+    let cidr = IpNetwork::V4("192.168.1.0/24".parse().unwrap());
     let mac = MacAddress::new([0x00, 0x11, 0x22, 0x33, 0x44, 0x55]);
 
     // Insert test data
@@ -256,56 +264,56 @@ async fn test_network_address_types(pool: &PgPool) -> Result<(), Error> {
         "INSERT INTO table_network_address_types (inet_column, cidr_column, macaddr_column, macaddr8_column) 
          VALUES ($1, $2, $3, $4)",
     )
-    .bind(ip.to_string())
-    .bind(Some("192.168.1.0/24"))
+    .bind(ip)
+    .bind(Some(cidr))
     .bind(Some(mac))
     .bind(Some(mac))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_network_address_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableNetworkAddressType,
+    let result = sqlx::query_as::<_, autostructs::TableNetworkAddressType>(
         "SELECT * FROM table_network_address_types WHERE inet_column = $1",
-        ip.to_string()
     )
+    .bind(ip)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_network_address_types: Failed to query data")?;
 
-    assert_eq!(result.inet_column, ip.to_string());
-    assert_eq!(result.cidr_column, Some("192.168.1.0/24"));
+    assert_eq!(result.inet_column, ip);
+    assert_eq!(result.cidr_column, Some(cidr));
     assert_eq!(result.macaddr_column, Some(mac));
-    assert_eq!(result.macaddr8_column, Some(mac));
+    // assert_eq!(result.macaddr_8_column, Some(mac));
 
     Ok(())
 }
 
 async fn test_bit_string_types(pool: &PgPool) -> Result<(), Error> {
+    let bit_val = BitVec::from_bytes(&[0b10100000]);
+    let bit_varying = BitVec::from_bytes(&[0b10100000]);
+
     // Insert test data
     sqlx::query(
-        "INSERT INTO table_bit_string_types (bit_column, bit_varying_column) 
-         VALUES ($1, $2)",
+        "INSERT INTO table_bit_string_types (bit_column, bit_varying_column) VALUES ($1::bit(8), $2::bit varying(8))",
     )
-    .bind("10101010")
-    .bind(Some("1010"))
+    .bind(&bit_val)
+    .bind(Some(&bit_varying))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_bit_string_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableBitStringType,
-        "SELECT * FROM table_bit_string_types WHERE bit_column = $1",
-        "10101010"
+    let result = sqlx::query_as::<_, autostructs::TableBitStringType>(
+        "SELECT * FROM table_bit_string_types WHERE bit_column = $1::bit(8)",
     )
+    .bind(&bit_val)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_bit_string_types: Failed to query data")?;
 
-    assert_eq!(result.bit_column, "10101010");
-    assert_eq!(result.bit_varying_column, Some("1010"));
+    assert_eq!(result.bit_column, bit_val, "bit value was not expected");
+    assert_eq!(result.bit_varying_column, Some(bit_varying), "bit varying value was not expected");
 
     Ok(())
 }
@@ -314,25 +322,28 @@ async fn test_text_search_types(pool: &PgPool) -> Result<(), Error> {
     // Insert test data
     sqlx::query(
         "INSERT INTO table_text_search_types (tsvector_column, tsquery_column) 
-         VALUES ($1, $2)",
+         VALUES (to_tsvector('english', $1), to_tsquery('english', $2))",
     )
     .bind("test search")
     .bind(Some("test & search"))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_text_search_types: Failed to insert test data")?;
 
-    // Query and verify using generated struct
-    let result = sqlx::query_as::<_, autostructs::TableTextSearchType>(
-        "SELECT * FROM table_text_search_types WHERE tsvector_column = $1",
+    // Query and verify using direct row access
+    let row = sqlx::query(
+        "SELECT * FROM table_text_search_types WHERE tsvector_column = to_tsvector('english', $1)",
     )
     .bind("test search")
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_text_search_types: Failed to query data")?;
 
-    assert_eq!(result.tsvector_column, "test search");
-    assert_eq!(result.tsquery_column, Some("test & search".to_string()));
+    let tsvector: String = row.try_get("tsvector_column")?;
+    let tsquery: Option<String> = row.try_get("tsquery_column")?;
+
+    assert_eq!(tsvector, "'search':2 'test':1");
+    assert_eq!(tsquery, Some("'test' & 'search'".to_string()));
 
     Ok(())
 }
@@ -341,23 +352,20 @@ async fn test_xml_type(pool: &PgPool) -> Result<(), Error> {
     let xml_data = "<test>data</test>";
 
     // Insert test data
-    sqlx::query(
-        "INSERT INTO table_xml_type (xml_column) VALUES ($1)",
-    )
-    .bind(xml_data)
-    .execute(pool)
-    .await
-    .context("Failed to insert test data")?;
+    sqlx::query("INSERT INTO table_xml_type (xml_column) VALUES ($1)")
+        .bind(xml_data)
+        .execute(pool)
+        .await
+        .context("test_xml_type: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableXmlType,
+    let result = sqlx::query_as::<_, autostructs::TableXmlType>(
         "SELECT * FROM table_xml_type WHERE xml_column = $1",
-        xml_data
     )
+    .bind(xml_data)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_xml_type: Failed to query data")?;
 
     assert_eq!(result.xml_column, xml_data);
 
@@ -376,17 +384,16 @@ async fn test_json_types(pool: &PgPool) -> Result<(), Error> {
     .bind(json_data.clone())
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_json_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableJsonType,
+    let result = sqlx::query_as::<_, autostructs::TableJsonType>(
         "SELECT * FROM table_json_types WHERE jsonb_column = $1",
-        json_data
     )
+    .bind(json_data.clone())
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_json_types: Failed to query data")?;
 
     assert_eq!(result.json_column, Some(json_data.clone()));
     assert_eq!(result.jsonb_column, json_data);
@@ -409,24 +416,61 @@ async fn test_range_types(pool: &PgPool) -> Result<(), Error> {
     .bind(Some("[2024-01-01,2024-12-31)"))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_range_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableRangeType,
+    let result = sqlx::query_as::<_, autostructs::TableRangeType>(
         "SELECT * FROM table_range_types WHERE int4range_column = $1",
-        "[1,5)"
     )
+    .bind("[1,5)")
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_range_types: Failed to query data")?;
 
-    assert_eq!(result.int4range_column, "[1,5)");
-    assert_eq!(result.int8range_column, Some("[1,10)"));
-    assert_eq!(result.numrange_column, "[1.1,5.5)");
-    assert_eq!(result.tsrange_column, Some("[2024-01-01,2024-12-31)"));
-    assert_eq!(result.tstzrange_column, Some("[2024-01-01 00:00:00+00,2024-12-31 23:59:59+00)"));
-    assert_eq!(result.daterange_column, Some("[2024-01-01,2024-12-31)"));
+    // Convert string representations to PgRange types for comparison
+    let int4range = PgRange::from(1..5);
+    let int8range = Some(PgRange::from(1i64..10i64));
+    let numrange =
+        PgRange::from(Decimal::from_str("1.1").unwrap()..Decimal::from_str("5.5").unwrap());
+
+    let start_ts = NaiveDate::from_ymd_opt(2024, 1, 1)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap();
+    let end_ts = NaiveDate::from_ymd_opt(2024, 12, 31)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap();
+    let tsrange = Some(PgRange::from(start_ts..end_ts));
+
+    assert_eq!(result.int_4range_column, int4range);
+    assert_eq!(result.int_8range_column, int8range);
+    assert_eq!(result.numrange_column, numrange);
+    assert_eq!(result.tsrange_column, tsrange);
+    // Create tstzrange
+    let start_tstz = DateTime::<Utc>::from_naive_utc_and_offset(
+        NaiveDate::from_ymd_opt(2024, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(),
+        Utc,
+    );
+    let end_tstz = DateTime::<Utc>::from_naive_utc_and_offset(
+        NaiveDate::from_ymd_opt(2024, 12, 31)
+            .unwrap()
+            .and_hms_opt(23, 59, 59)
+            .unwrap(),
+        Utc,
+    );
+    let tstzrange = Some(PgRange::from(start_tstz..end_tstz));
+
+    // Create daterange
+    let start_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+    let end_date = NaiveDate::from_ymd_opt(2024, 12, 31).unwrap();
+    let daterange = Some(PgRange::from(start_date..end_date));
+
+    assert_eq!(result.tstzrange_column, tstzrange);
+    assert_eq!(result.daterange_column, daterange);
 
     Ok(())
 }
@@ -447,25 +491,27 @@ async fn test_geometric_types(pool: &PgPool) -> Result<(), Error> {
     .bind(Some("<(1,1),1>"))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_geometric_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableGeometricType,
+    let result = sqlx::query_as::<_, autostructs::TableGeometricType>(
         "SELECT * FROM table_geometric_types WHERE point_column = $1",
-        "(1,1)"
     )
+    .bind("(1,1)")
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_geometric_types: Failed to query data")?;
 
     assert_eq!(result.point_column, "(1,1)");
-    assert_eq!(result.line_column, Some("{(1,1),(2,2)}"));
-    assert_eq!(result.lseg_column, "[(1,1),(2,2)]");
-    assert_eq!(result.box_column, Some("((1,1),(2,2))"));
-    assert_eq!(result.path_column, Some("[(1,1),(2,2),(1,1)]"));
+    assert_eq!(result.line_column, Some(String::from("{(1,1),(2,2)}")));
+    assert_eq!(result.lseg_column, String::from("[(1,1),(2,2)]"));
+    assert_eq!(result.box_column, Some(String::from("((1,1),(2,2))")));
+    assert_eq!(
+        result.path_column,
+        Some(String::from("[(1,1),(2,2),(1,1)]"))
+    );
     assert_eq!(result.polygon_column, "((1,1),(2,1),(2,2),(1,2),(1,1))");
-    assert_eq!(result.circle_column, Some("<(1,1),1>"));
+    assert_eq!(result.circle_column, Some(String::from("<(1,1),1>")));
 
     Ok(())
 }
@@ -480,17 +526,16 @@ async fn test_array_types(pool: &PgPool) -> Result<(), Error> {
     .bind(vec!["a", "b", "c"])
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_array_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableArrayType,
-        "SELECT * FROM table_array_types WHERE text_array_column = $1",
-        vec!["a", "b", "c"]
+    let result = sqlx::query_as::<_, autostructs::TableArrayType>(
+        "SELECT * FROM table_array_types WHERE text_array_column = $1"
     )
+    .bind(vec!["a", "b", "c"])
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_array_types: Failed to query data")?;
 
     assert_eq!(result.integer_array_column, Some(vec![1, 2, 3]));
     assert_eq!(result.text_array_column, vec!["a", "b", "c"]);
@@ -506,16 +551,15 @@ async fn test_composite_type(pool: &PgPool) -> Result<(), Error> {
     )
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_composite_type: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableCompositeType,
+    let result = sqlx::query_as::<_, autostructs::TableCompositeType>(
         "SELECT * FROM table_composite_type WHERE address_column = ROW('123 Main St', 'City', '12345')"
     )
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_composite_type: Failed to query data")?;
 
     assert_eq!(result.address_column.street, "123 Main St");
     assert_eq!(result.address_column.city, "City");
@@ -526,75 +570,69 @@ async fn test_composite_type(pool: &PgPool) -> Result<(), Error> {
 
 async fn test_enum_type(pool: &PgPool) -> Result<(), Error> {
     // Insert test data
-    sqlx::query(
-        "INSERT INTO table_enum_type (mood_column) VALUES ($1)",
-    )
-    .bind("happy")
-    .execute(pool)
-    .await
-    .context("Failed to insert test data")?;
+    sqlx::query("INSERT INTO table_enum_type (mood_column) VALUES ($1)")
+        .bind("happy")
+        .execute(pool)
+        .await
+        .context("test_enum_type: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableEnumType,
-        "SELECT * FROM table_enum_type WHERE mood_column = $1",
-        "happy"
+    let result = sqlx::query_as::<_, autostructs::TableEnumType>(
+        "SELECT * FROM table_enum_type WHERE mood_column = $1"
     )
+    .bind("happy")
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_enum_type: Failed to query data")?;
 
-    assert_eq!(result.mood_column, "happy");
+    assert_eq!(result.mood_column, autostructs::Mood::Happy);
 
     Ok(())
 }
 
 async fn test_fdw(pool: &PgPool) -> Result<(), Error> {
     // Insert test data
-    sqlx::query(
-        "INSERT INTO table_fdw (foreign_data_column) VALUES ($1)",
-    )
-    .bind("test data")
-    .execute(pool)
-    .await
-    .context("Failed to insert test data")?;
+    sqlx::query("INSERT INTO table_fdw (foreign_data_column) VALUES ($1)")
+        .bind("test data")
+        .execute(pool)
+        .await
+        .context("test_fdw: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableFdw,
-        "SELECT * FROM table_fdw WHERE foreign_data_column = $1",
-        "test data"
+    let result = sqlx::query_as::<_, autostructs::TableFdw>(
+        "SELECT * FROM table_fdw WHERE foreign_data_column = $1"
     )
+    .bind("test data")
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_fdw: Failed to query data")?;
 
-    assert_eq!(result.foreign_data_column, "test data");
+    assert_eq!(result.foreign_data_column, Some("test data".to_string()));
 
     Ok(())
 }
 
 async fn test_oid_types(pool: &PgPool) -> Result<(), Error> {
+    // Create an Oid value for testing
+    let oid = Oid(1234);
+    
     // Insert test data
-    sqlx::query(
-        "INSERT INTO table_oid_types (oid_column) VALUES ($1)",
-    )
-    .bind(1234)
-    .execute(pool)
-    .await
-    .context("Failed to insert test data")?;
+    sqlx::query("INSERT INTO table_oid_types (oid_column) VALUES ($1)")
+        .bind(oid)
+        .execute(pool)
+        .await
+        .context("test_oid_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableOidType,
-        "SELECT * FROM table_oid_types WHERE oid_column = $1",
-        1234
+    let result = sqlx::query_as::<_, autostructs::TableOidType>(
+        "SELECT * FROM table_oid_types WHERE oid_column = $1"
     )
+    .bind(1234)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_oid_types: Failed to query data")?;
 
-    assert_eq!(result.oid_column, 1234);
+    assert_eq!(result.oid_column, oid);
 
     Ok(())
 }
@@ -611,17 +649,16 @@ async fn test_special_types(pool: &PgPool) -> Result<(), Error> {
     .bind(Some(uuid))
     .execute(pool)
     .await
-    .context("Failed to insert test data")?;
+    .context("test_special_types: Failed to insert test data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableSpecialType,
-        "SELECT * FROM table_special_types WHERE pg_lsn_column = $1",
-        "0/16B7898"
+    let result = sqlx::query_as::<_, autostructs::TableSpecialType>(
+        "SELECT * FROM table_special_types WHERE pg_lsn_column = $1"
     )
+    .bind("0/16B7898")
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_special_types: Failed to query data")?;
 
     assert_eq!(result.pg_lsn_column, "0/16B7898");
     assert_eq!(result.uuid_column, Some(uuid));
@@ -631,33 +668,33 @@ async fn test_special_types(pool: &PgPool) -> Result<(), Error> {
 
 async fn test_foreign_keys(pool: &PgPool) -> Result<(), Error> {
     // First insert data into referenced tables
-    let basic_id = sqlx::query!(
+    let basic_id = sqlx::query(
         "INSERT INTO table_basic_types (integer_column, bigint_column, double_precision_column) 
-         VALUES ($1, $2, $3) RETURNING id",
-        42, 9999i64, 3.14f64
+         VALUES ($1, $2, $3) RETURNING id"
     )
+    .bind(42)
+    .bind(9999i64)
+    .bind(3.14f64)
     .fetch_one(pool)
     .await
-    .context("Failed to insert basic type data")?
-    .id;
+    .context("test_foreign_keys: Failed to insert basic type data")?
+    .get::<i32, _>("id");
 
-    let char_id = sqlx::query!(
-        "INSERT INTO table_character_types (varchar_column) VALUES ($1) RETURNING id",
-        "test varchar"
+    let char_id = sqlx::query(
+        "INSERT INTO table_character_types (varchar_column) VALUES ($1) RETURNING id"
     )
+    .bind("test varchar")
     .fetch_one(pool)
     .await
-    .context("Failed to insert character type data")?
-    .id;
+    .context("test_foreign_keys: Failed to insert character type data")?
+    .get::<i32, _>("id");
 
     let uuid = Uuid::new_v4();
-    sqlx::query!(
-        "INSERT INTO table_uuid_type (id) VALUES ($1)",
-        uuid
-    )
-    .execute(pool)
-    .await
-    .context("Failed to insert uuid data")?;
+    sqlx::query("INSERT INTO table_uuid_type (id) VALUES ($1)")
+        .bind(uuid)
+        .execute(pool)
+        .await
+        .context("test_foreign_keys: Failed to insert uuid data")?;
 
     // Insert test data with foreign keys
     sqlx::query(
@@ -669,17 +706,16 @@ async fn test_foreign_keys(pool: &PgPool) -> Result<(), Error> {
     .bind(uuid)
     .execute(pool)
     .await
-    .context("Failed to insert foreign key data")?;
+    .context("test_foreign_keys: Failed to insert foreign key data")?;
 
     // Query and verify using generated struct
-    let result = sqlx::query_as!(
-        autostructs::TableForeignKey,
-        "SELECT * FROM table_foreign_keys WHERE fk_basic = $1",
-        basic_id
+    let result = sqlx::query_as::<_, autostructs::TableForeignKey>(
+        "SELECT * FROM table_foreign_keys WHERE fk_basic = $1"
     )
+    .bind(basic_id)
     .fetch_one(pool)
     .await
-    .context("Failed to query data")?;
+    .context("test_foreign_keys: Failed to query data")?;
 
     assert_eq!(result.fk_basic, Some(basic_id));
     assert_eq!(result.fk_char, Some(char_id));

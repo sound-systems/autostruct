@@ -61,9 +61,12 @@ impl Generator {
                 let name = e.name.to_pascal_case();
                 let mut snippet = Snippet::new(name.clone());
 
-                snippet
-                    .code
-                    .push_str("#[derive(Debug, Clone, PartialEq, Eq)]\n");
+                let macros = match self.options.framework {
+                    Framework::None => "#[derive(Debug, Clone, PartialEq, Eq)]\n",
+                    Framework::Sqlx => "#[derive(Debug, Clone, PartialEq, Eq, sqlx::Type)]\n",
+                };
+
+                snippet.code.push_str(macros);
                 snippet.code.push_str(&format!("pub enum {} {{\n", name));
 
                 for value in &e.values {
@@ -84,8 +87,11 @@ impl Generator {
             .map(|composite| {
                 let table_name = self.format_name(&composite.name);
                 let mut snippet = Snippet::new(table_name.clone());
-                self.add_framework_macros(&mut snippet);
-
+                let macros = match self.options.framework {
+                    Framework::None => "#[derive(Debug, Clone)]\n",
+                    Framework::Sqlx => "#[derive(Debug, Clone, sqlx::Type)]\n",
+                };
+                snippet.code.push_str(macros);
                 snippet
                     .code
                     .push_str(&format!("pub struct {} {{\n", table_name.to_pascal_case()));
@@ -146,6 +152,9 @@ impl Generator {
             Type::TimestampWithTz(_) => {
                 snippet.add_import("chrono::{DateTime, Utc}");
             }
+            Type::Interval(_) => {
+                snippet.add_import("sqlx::postgres::types::PgInterval");
+            }
             Type::Decimal(_) => snippet.add_import("rust_decimal::Decimal"),
             Type::IpNetwork(_) => snippet.add_import("ipnetwork::IpNetwork"),
             Type::Json(_) => snippet.add_import("serde_json::Value"),
@@ -154,12 +163,16 @@ impl Generator {
             Type::Option(inner) => self.add_type_imports(snippet, inner),
             Type::Vector(inner) => self.add_type_imports(snippet, inner),
             Type::Range(inner) => {
-                snippet.add_import("std::ops::Range");
+                snippet.add_import("sqlx::postgres::types::PgRange");
                 self.add_type_imports(snippet, inner);
             }
+            Type::Money(_) => snippet.add_import("sqlx::postgres::types::PgMoney"),
             Type::Custom(name) => {
-                // If it's a custom type from defined schema, add it as a dependency
-                if !name.contains("::") {
+                if name.starts_with("postgis::") {
+                    snippet.add_import("postgis");
+                } else if name == "Oid" {
+                    snippet.add_import("sqlx::postgres::types::Oid");
+                } else if !name.contains("::") {
                     snippet.add_dependency(name);
                 }
             }
@@ -177,7 +190,6 @@ impl Generator {
                 snippet
                     .code
                     .push_str("#[derive(Debug, Clone, sqlx::FromRow)]\n");
-                snippet.add_import("sqlx::FromRow");
             }
         }
     }

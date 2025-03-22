@@ -233,6 +233,7 @@ impl InfoProvider for Database {
             t if NUMERIC_TYPES.contains(&t) => map_numeric_type(t),
             t if TEMPORAL_TYPES.contains(&t) => map_temporal_type(t),
             t if STRING_TYPES.contains(&t) => Type::String("String"),
+            t if BIT_TYPES.contains(&t) => Type::String("sqlx::types::BitVec"),
             t if BINARY_TYPES.contains(&t) => Type::ByteArray("Vec<u8>"),
             t => map_specialized_type(t),
         }
@@ -296,11 +297,10 @@ const STRING_TYPES: &[&str] = &[
     "character",
     "citext",
     "bpchar",
-    "bit",
-    "varbit",
     "char",
-    "uuid",
 ];
+
+const BIT_TYPES: &[&str] = &["bit", "varbit"];
 
 const BINARY_TYPES: &[&str] = &["bytea", "bit varying"];
 
@@ -313,13 +313,8 @@ const GEO_TYPES: &[&str] = &["point", "line", "lseg", "box", "path", "polygon", 
 const TEXT_SEARCH_TYPES: &[&str] = &["tsquery", "tsvector"];
 
 fn map_geometric_types(typ: &str) -> rust::Type {
-    let geo_type = match typ {
-        "lseg" | "path" => "line string",
-        "box" => "rect",
-        "circle" => "point", // Note: geo-types doesn't have a Circle type, we might need to do something more clever here        
-        _ => typ,
-    };
-    Type::Custom(format!("geo_types::{}<f64>", geo_type.to_pascal_case()))
+    // All geometric types are represented as strings in PostgreSQL text format
+    Type::String("String")
 }
 
 fn map_numeric_type(typ: &str) -> rust::Type {
@@ -331,8 +326,8 @@ fn map_numeric_type(typ: &str) -> rust::Type {
         "numeric" | "decimal" => Type::Decimal("Decimal"),
         "real" | "float4" => Type::F32("f32"),
         "double precision" | "float8" => Type::F64("f64"),
-        "money" => Type::Money("Decimal"),
-        "oid" => Type::U32("u32"),
+        "money" => Type::Money("PgMoney"),
+        "oid" => Type::Custom("Oid".to_string()),
         _ => unreachable!("invalid numeric type"),
     }
 }
@@ -341,17 +336,22 @@ fn map_temporal_type(typ: &str) -> rust::Type {
     match typ {
         "date" => Type::Date("NaiveDate"),
         "time" | "time without time zone" => Type::Time("NaiveTime"),
-        "timetz" | "time with time zone" => Type::TimestampWithTz("DateTime<Utc>"),
+        "timetz" | "time with time zone" => Type::Time("sqlx::postgres::types::PgTimeTz"),
         "timestamp" | "timestamp without time zone" => Type::Timestamp("NaiveDateTime"),
         "timestamp with time zone" | "timestamptz" => Type::TimestampWithTz("DateTime<Utc>"),
-        "interval" => Type::Interval("chrono::Duration"),
+        "interval" => Type::Interval("PgInterval"),
         _ => unreachable!("invalid temporal type"),
     }
 }
 
 fn map_specialized_type(typ: &str) -> rust::Type {
     match typ {
-        t if NETWORK_TYPES.contains(&t) => Type::IpNetwork("ipnetwork::IpNetwork"),
+        t if NETWORK_TYPES.contains(&t) => {
+            match t {
+                "macaddr" | "macaddr8" => Type::Custom("sqlx::types::mac_address::MacAddress".to_string()),
+                _ => Type::IpNetwork("ipnetwork::IpNetwork"),
+            }
+        },
         t if JSON_TYPES.contains(&t) => Type::Json("serde_json::Value"),
         t if TEXT_SEARCH_TYPES.contains(&t) => {
             Type::String("String")
@@ -360,7 +360,7 @@ fn map_specialized_type(typ: &str) -> rust::Type {
         "uuid" => Type::Uuid("uuid::Uuid"),
         "hstore" => Type::Custom("std::collections::HashMap<String, Option<String>>".to_string()),
         "ltree" => Type::Tree("postgres_types::LTree"),
-        "pg_lsn" => Type::Custom("postgres_types::PgLsn".to_string()),
+        "pg_lsn" => Type::String("String"),
         "void" => Type::Void("()"),
         // Handle array types
         t if t.starts_with('_') => {

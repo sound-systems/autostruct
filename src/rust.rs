@@ -68,7 +68,7 @@ impl std::fmt::Display for Type {
             // Container types that wrap other types
             Type::Vector(inner) => write!(f, "Vec<{inner}>"),
             Type::Option(inner) => write!(f, "Option<{inner}>"),
-            Type::Range(inner) => write!(f, "Range<{inner}>"),
+            Type::Range(inner) => write!(f, "PgRange<{inner}>"),
 
             // Custom type that owns a String
             Type::Custom(name) => write!(f, "{name}"),
