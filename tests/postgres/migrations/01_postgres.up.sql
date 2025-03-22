@@ -161,7 +161,6 @@ CREATE TABLE table_oid_types (
 CREATE TABLE table_special_types (
     id SERIAL PRIMARY KEY,
     pg_lsn_column PG_LSN NOT NULL,
-    txid_snapshot_column TXID_SNAPSHOT,
     uuid_column UUID
 );
 

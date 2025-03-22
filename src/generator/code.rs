@@ -1,4 +1,5 @@
 use crate::database::InfoProvider;
+use crate::rust;
 use crate::{database, rust::Type};
 use anyhow::Error;
 use cruet::Inflector;
@@ -83,19 +84,7 @@ impl Generator {
             .map(|composite| {
                 let table_name = self.format_name(&composite.name);
                 let mut snippet = Snippet::new(table_name.clone());
-
-                // Add framework-specific derives
-                match self.options.framework {
-                    Framework::None => {
-                        snippet.code.push_str("#[derive(Debug, Clone)]\n");
-                    }
-                    Framework::Sqlx => {
-                        snippet
-                            .code
-                            .push_str("#[derive(Debug, Clone, sqlx::FromRow)]\n");
-                        snippet.add_import("sqlx::FromRow");
-                    }
-                }
+                self.add_framework_macros(&mut snippet);
 
                 snippet
                     .code
@@ -104,16 +93,8 @@ impl Generator {
                 for attr in &composite.attributes {
                     let rust_type = self.provider.type_name_from(&attr.data_type);
                     self.add_type_imports(&mut snippet, &rust_type);
-
                     let field_name = attr.name.to_snake_case();
-
-                    // For SQLx framework, add nullable attribute if the type is an Option
-                    if let Framework::Sqlx = self.options.framework {
-                        if let Type::Option(_) = rust_type {
-                            snippet.code.push_str("    #[sqlx(nullable)]\n");
-                        }
-                    }
-
+                    self.add_framework_attribute(&rust_type, &mut snippet);
                     let struct_field = format!("    pub {field_name}: {rust_type},\n");
                     snippet.code.push_str(&struct_field);
                 }
@@ -130,19 +111,7 @@ impl Generator {
             .map(|table| {
                 let table_name = self.format_name(&table.name);
                 let mut snippet = Snippet::new(table_name.clone());
-
-                // Add framework-specific derives
-                match self.options.framework {
-                    Framework::None => {
-                        snippet.code.push_str("#[derive(Debug, Clone)]\n");
-                    }
-                    Framework::Sqlx => {
-                        snippet
-                            .code
-                            .push_str("#[derive(Debug, Clone, sqlx::FromRow)]\n");
-                        snippet.add_import("sqlx::FromRow");
-                    }
-                }
+                self.add_framework_macros(&mut snippet);
 
                 snippet
                     .code
@@ -150,27 +119,13 @@ impl Generator {
 
                 for column in &table.columns {
                     let mut rust_type = self.provider.type_name_from(&column.udt_name);
-
-                    // Handle foreign key references
-                    if let Some(fk_table) = &column.foreign_key_table {
-                        let fk_type = self.format_name(fk_table).to_pascal_case();
-                        snippet.add_dependency(&fk_type);
-                    }
-
                     if column.is_nullable {
                         rust_type = Type::Option(Box::new(rust_type));
                     }
 
                     self.add_type_imports(&mut snippet, &rust_type);
-
                     let field_name = column.name.to_snake_case();
-
-                    // Add framework-specific field attributes
-                    if let Framework::Sqlx = self.options.framework {
-                        if column.is_nullable {
-                            snippet.code.push_str("    #[sqlx(nullable)]\n");
-                        }
-                    }
+                    self.add_framework_attribute(&rust_type, &mut snippet);
 
                     let struct_field = format!("    pub {field_name}: {rust_type},\n");
                     snippet.code.push_str(&struct_field);
@@ -206,13 +161,32 @@ impl Generator {
                 // If it's a custom type from defined schema, add it as a dependency
                 if !name.contains("::") {
                     snippet.add_dependency(name);
-                } else if name.starts_with("postgres_types::") {
-                    // Extract the type name after postgres_types::
-                    let type_name = name.strip_prefix("postgres_types::").unwrap();
-                    snippet.add_import(&format!("postgres_types::{}", type_name));
                 }
             }
             _ => {}
+        }
+    }
+
+    fn add_framework_macros(&self, snippet: &mut Snippet) {
+        // Add framework-specific derives and imports
+        match self.options.framework {
+            Framework::None => {
+                snippet.code.push_str("#[derive(Debug, Clone)]\n");
+            }
+            Framework::Sqlx => {
+                snippet
+                    .code
+                    .push_str("#[derive(Debug, Clone, sqlx::FromRow)]\n");
+                snippet.add_import("sqlx::FromRow");
+            }
+        }
+    }
+
+    fn add_framework_attribute(&self, rust_type: &rust::Type, snippet: &mut Snippet) {
+        if let Framework::Sqlx = self.options.framework {
+            if let Type::Option(_) = rust_type {
+                snippet.code.push_str("    #[sqlx(default)]\n");
+            }
         }
     }
 

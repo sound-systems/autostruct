@@ -12,7 +12,9 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5.4", features = ["derive", "env"] }
 cruet = "0.14.0"
 dotenvy = "0.15.7"
+geo-types = "0.7.15"
 ipnetwork = "0.20"
+mac_address = "1.1.8"
 postgis = "0.9"
 postgres-types = { version = "0.2", features = ["derive", "with-uuid-1", "with-time-0_3", "with-chrono-0_4"] }
 rust_decimal = "1.34"

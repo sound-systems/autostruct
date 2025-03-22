@@ -222,7 +222,6 @@ impl Database {
 
 #[async_trait]
 impl InfoProvider for Database {
-
     fn type_name_from(&self, db_type: &str) -> rust::Type {
         // Handle arrays first
         if let Some(inner_type) = db_type.strip_prefix('_') {
@@ -230,6 +229,7 @@ impl InfoProvider for Database {
         }
 
         match db_type {
+            t if GEO_TYPES.contains(&t) => map_geometric_types(t),
             t if NUMERIC_TYPES.contains(&t) => map_numeric_type(t),
             t if TEMPORAL_TYPES.contains(&t) => map_temporal_type(t),
             t if STRING_TYPES.contains(&t) => Type::String("String"),
@@ -251,23 +251,55 @@ impl InfoProvider for Database {
     }
 }
 
-
 // Constants for type categorization
 const NUMERIC_TYPES: &[&str] = &[
-    "bool", "boolean", "smallint", "smallserial", "int2", "int", "integer",
-    "serial", "int4", "bigint", "bigserial", "int8", "numeric", "decimal",
-    "real", "float4", "double precision", "float8", "money",
+    "bool",
+    "boolean",
+    "smallint",
+    "smallserial",
+    "int2",
+    "int",
+    "integer",
+    "serial",
+    "int4",
+    "bigint",
+    "bigserial",
+    "int8",
+    "numeric",
+    "decimal",
+    "real",
+    "float4",
+    "double precision",
+    "float8",
+    "money",
+    "oid",
 ];
 
 const TEMPORAL_TYPES: &[&str] = &[
-    "date", "time", "time without time zone", "timestamp",
-    "timestamp without time zone", "timestamp with time zone", "timestamptz",
+    "date",
+    "time",
+    "time without time zone",
+    "time with time zone",
+    "timetz",
+    "timestamp",
+    "timestamp without time zone",
+    "timestamp with time zone",
+    "timestamptz",
     "interval",
 ];
 
 const STRING_TYPES: &[&str] = &[
-    "varchar", "text", "name", "character varying", "character", "citext",
-    "bpchar", "bit", "varbit", "char", "uuid",
+    "varchar",
+    "text",
+    "name",
+    "character varying",
+    "character",
+    "citext",
+    "bpchar",
+    "bit",
+    "varbit",
+    "char",
+    "uuid",
 ];
 
 const BINARY_TYPES: &[&str] = &["bytea", "bit varying"];
@@ -280,6 +312,16 @@ const GEO_TYPES: &[&str] = &["point", "line", "lseg", "box", "path", "polygon", 
 
 const TEXT_SEARCH_TYPES: &[&str] = &["tsquery", "tsvector"];
 
+fn map_geometric_types(typ: &str) -> rust::Type {
+    let geo_type = match typ {
+        "lseg" | "path" => "line string",
+        "box" => "rect",
+        "circle" => "point", // Note: geo-types doesn't have a Circle type, we might need to do something more clever here        
+        _ => typ,
+    };
+    Type::Custom(format!("geo_types::{}<f64>", geo_type.to_pascal_case()))
+}
+
 fn map_numeric_type(typ: &str) -> rust::Type {
     match typ {
         "bool" | "boolean" => Type::Bool("bool"),
@@ -290,16 +332,18 @@ fn map_numeric_type(typ: &str) -> rust::Type {
         "real" | "float4" => Type::F32("f32"),
         "double precision" | "float8" => Type::F64("f64"),
         "money" => Type::Money("Decimal"),
+        "oid" => Type::U32("u32"),
         _ => unreachable!("invalid numeric type"),
     }
 }
 
 fn map_temporal_type(typ: &str) -> rust::Type {
     match typ {
-        "date" => Type::Date("chrono::NaiveDate"),
-        "time" | "time without time zone" => Type::Time("chrono::NaiveTime"),
-        "timestamp" | "timestamp without time zone" => Type::Timestamp("chrono::NaiveDateTime"),
-        "timestamp with time zone" | "timestamptz" => Type::TimestampWithTz("chrono::DateTime<Utc>"),
+        "date" => Type::Date("NaiveDate"),
+        "time" | "time without time zone" => Type::Time("NaiveTime"),
+        "timetz" | "time with time zone" => Type::TimestampWithTz("DateTime<Utc>"),
+        "timestamp" | "timestamp without time zone" => Type::Timestamp("NaiveDateTime"),
+        "timestamp with time zone" | "timestamptz" => Type::TimestampWithTz("DateTime<Utc>"),
         "interval" => Type::Interval("chrono::Duration"),
         _ => unreachable!("invalid temporal type"),
     }
@@ -309,12 +353,14 @@ fn map_specialized_type(typ: &str) -> rust::Type {
     match typ {
         t if NETWORK_TYPES.contains(&t) => Type::IpNetwork("ipnetwork::IpNetwork"),
         t if JSON_TYPES.contains(&t) => Type::Json("serde_json::Value"),
-        t if GEO_TYPES.contains(&t) => Type::Custom(format!("postgis::{}", t.to_pascal_case())),
-        t if TEXT_SEARCH_TYPES.contains(&t) => Type::Custom(format!("postgres_types::{}", t.to_pascal_case())),
+        t if TEXT_SEARCH_TYPES.contains(&t) => {
+            Type::String("String")
+        }
         "xml" => Type::Xml("String"),
         "uuid" => Type::Uuid("uuid::Uuid"),
         "hstore" => Type::Custom("std::collections::HashMap<String, Option<String>>".to_string()),
         "ltree" => Type::Tree("postgres_types::LTree"),
+        "pg_lsn" => Type::Custom("postgres_types::PgLsn".to_string()),
         "void" => Type::Void("()"),
         // Handle array types
         t if t.starts_with('_') => {
@@ -325,9 +371,11 @@ fn map_specialized_type(typ: &str) -> rust::Type {
         t if t.starts_with("int4range") => Type::Range(Box::new(Type::I32("i32"))),
         t if t.starts_with("int8range") => Type::Range(Box::new(Type::I64("i64"))),
         t if t.starts_with("numrange") => Type::Range(Box::new(Type::Decimal("Decimal"))),
-        t if t.starts_with("tsrange") => Type::Range(Box::new(Type::Timestamp("chrono::NaiveDateTime"))),
-        t if t.starts_with("tstzrange") => Type::Range(Box::new(Type::TimestampWithTz("chrono::DateTime<Utc>"))),
-        t if t.starts_with("daterange") => Type::Range(Box::new(Type::Date("chrono::NaiveDate"))),
+        t if t.starts_with("tsrange") => Type::Range(Box::new(Type::Timestamp("NaiveDateTime"))),
+        t if t.starts_with("tstzrange") => {
+            Type::Range(Box::new(Type::TimestampWithTz("DateTime<Utc>")))
+        }
+        t if t.starts_with("daterange") => Type::Range(Box::new(Type::Date("NaiveDate"))),
         // For any other type, treat it as a custom type
         other => Type::Custom(other.to_string().to_pascal_case()),
     }
