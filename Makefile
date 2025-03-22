@@ -27,7 +27,8 @@ test.unit:
 	cargo test --lib --no-fail-fast
 
 ## executes postgres integration tests
-test.postgres:
+test.postgres: clean.testoutput
+	cargo test --test=setup_postgres --features=postgres_test
 	cargo test --test=runner --features=postgres_test
 
 ## executes integration tests against all supported databases
@@ -41,3 +42,4 @@ clean.all:
 ## cleans generated files created during a test run
 clean.testoutput:
 	rm -rf ./autostructs
+	rm -rf ./tests/postgres/autostructs
