@@ -2,6 +2,8 @@
 The `postgres` module provides an implementation of the `TableInfoProvider` trait for PostgreSQL databases.
 */
 
+use std::time::Duration;
+
 use crate::{
     database::InfoProvider,
     rust::{self, Type},
@@ -9,7 +11,7 @@ use crate::{
 use anyhow::{Context, Error};
 use async_trait::async_trait;
 use cruet::Inflector;
-use sqlx::{PgPool, Pool, Postgres};
+use sqlx::{pool::PoolOptions, ConnectOptions, PgPool, Pool, Postgres};
 
 use super::{
     convert::{CompositeTypeConverter, EnumConverter, TableConverter},
@@ -24,6 +26,8 @@ pub struct Builder {
     schema: Option<String>,
     /// A list of tables to exclude from the database connection.
     excluded_tables: Vec<String>,
+    /// The connection timeout to use when trying to establish a connection with the database
+    timeout: Duration,
 }
 
 impl Default for Builder {
@@ -38,6 +42,7 @@ impl Builder {
         Self {
             schema: None,
             excluded_tables: Vec::new(),
+            timeout: Duration::from_secs(5),
         }
     }
 
@@ -68,6 +73,19 @@ impl Builder {
         self.schema = Some(schema.to_string());
         self
     }
+    /// Sets the timeout duration to use when establishing a connection with the database
+    ///
+    /// # Arguments
+    ///
+    /// * `timeout` - the timeout duration to set
+    ///
+    /// # Returns
+    ///
+    /// A `Builder` instance with the provided timeout.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
 
     /// Builds the `Database` and establishes a connection with the specified configurations.
     ///
@@ -79,7 +97,9 @@ impl Builder {
     ///
     /// A `Result` containing the `Database` instance or an error.
     pub async fn connect(self, connection_string: &str) -> Result<impl InfoProvider, Error> {
-        let pool = PgPool::connect(connection_string)
+        let pool = PoolOptions::new()
+            .acquire_timeout(self.timeout)
+            .connect(connection_string)
             .await
             .context("failed to connect to postgresql database")?;
 
@@ -346,16 +366,14 @@ fn map_temporal_type(typ: &str) -> rust::Type {
 
 fn map_specialized_type(typ: &str) -> rust::Type {
     match typ {
-        t if NETWORK_TYPES.contains(&t) => {
-            match t {
-                "macaddr" | "macaddr8" => Type::Custom("sqlx::types::mac_address::MacAddress".to_string()),
-                _ => Type::IpNetwork("ipnetwork::IpNetwork"),
+        t if NETWORK_TYPES.contains(&t) => match t {
+            "macaddr" | "macaddr8" => {
+                Type::Custom("sqlx::types::mac_address::MacAddress".to_string())
             }
+            _ => Type::IpNetwork("ipnetwork::IpNetwork"),
         },
         t if JSON_TYPES.contains(&t) => Type::Json("serde_json::Value"),
-        t if TEXT_SEARCH_TYPES.contains(&t) => {
-            Type::String("String")
-        }
+        t if TEXT_SEARCH_TYPES.contains(&t) => Type::String("String"),
         "xml" => Type::Xml("String"),
         "uuid" => Type::Uuid("uuid::Uuid"),
         "hstore" => Type::Custom("std::collections::HashMap<String, Option<String>>".to_string()),

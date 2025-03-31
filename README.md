@@ -20,6 +20,7 @@
 ## Description
 
 AutoStruct simplifies the process of creating Rust structs from an existing PostgreSQL schema. It supports various PostgreSQL data types including:
+
 - Basic types (integer, numeric, boolean, etc.)
 - Character types (varchar, text, citext)
 - Date/Time types (timestamp, date, time, interval)
@@ -72,6 +73,7 @@ autostruct generate [OPTIONS]
   - `none`: Basic struct generation with Debug and Clone derives
   - `sqlx`: Adds SQLx-specific derives and types
 - `--exclude <EXCLUDE>`: Tables to exclude from generation (can be specified multiple times)
+- `-t, --timeout`: Sets the timeout to be used when establishing a database connection
 
 #### Examples
 

@@ -1,11 +1,12 @@
 pub mod migrate;
 
+use std::time::Duration;
+
 use anyhow::Context;
 use autostruct::generator;
 use migrate::POSTGRES_MIGRATOR;
 use sqlx::PgPool;
 use testcontainers_modules::{postgres::Postgres, testcontainers::runners::AsyncRunner};
-
 
 #[tokio::test]
 async fn setup_and_check() -> Result<(), Box<dyn std::error::Error>> {
@@ -40,6 +41,7 @@ async fn setup_and_check() -> Result<(), Box<dyn std::error::Error>> {
         exclude_tables: vec![],
         singular_table_names: true,
         framework: generator::Framework::Sqlx,
+        timeout: Duration::from_secs(3),
     };
 
     // Generate the code
@@ -49,19 +51,27 @@ async fn setup_and_check() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate that the autostructs folder has been generated
     let autostructs_path = std::path::Path::new("tests/postgres/autostructs");
-    assert!(autostructs_path.exists(), "Autostructs folder was not generated");
-    assert!(autostructs_path.is_dir(), "Autostructs path is not a directory");
-    
+    assert!(
+        autostructs_path.exists(),
+        "Autostructs folder was not generated"
+    );
+    assert!(
+        autostructs_path.is_dir(),
+        "Autostructs path is not a directory"
+    );
+
     // Check that the folder contains files
-    let entries = std::fs::read_dir(autostructs_path)
-        .context("Failed to read autostructs directory")?;
-    
-    let files: Vec<_> = entries
-        .filter_map(|entry| entry.ok())
-        .collect();
-    
+    let entries =
+        std::fs::read_dir(autostructs_path).context("Failed to read autostructs directory")?;
+
+    let files: Vec<_> = entries.filter_map(|entry| entry.ok()).collect();
+
     // Ensure we have at least one file generated
-    assert_eq!(files.len(), 24, "An incorrect amount of files were generated");
-    
+    assert_eq!(
+        files.len(),
+        24,
+        "An incorrect amount of files were generated"
+    );
+
     Ok(())
 }
