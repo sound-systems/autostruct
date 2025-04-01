@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use anyhow::Context;
 use autostruct::generator;
 use clap::Parser;
 use cli::{Cli, Commands};
@@ -10,7 +9,7 @@ mod cli;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    dotenv().context("failed to load environment variables")?;
+    let _ = dotenv();
     let cli = Cli::parse();
 
     match cli.command {

@@ -1,5 +1,6 @@
 use anyhow::bail;
 use clap::{Parser, Subcommand, ValueEnum};
+use humantime::{Duration, DurationError};
 
 use crate::generator::{self};
 
@@ -57,6 +58,15 @@ pub struct GenerateArgs {
     /// Specifies which framework-specific code to generate
     #[arg(long, value_enum, default_value_t = Framework::None)]
     pub framework: Framework,
+
+    /// Sets the connection timeout duration when connecting to the database
+    #[arg(short, long, value_parser = parse_duration, default_value = "3s")]
+    pub timeout: Duration,
+}
+
+fn parse_duration(arg: &str) -> Result<Duration, DurationError> {
+    let timeout: Duration = arg.parse()?;
+    Ok(timeout)
 }
 
 impl TryInto<generator::Arguments> for GenerateArgs {
@@ -77,6 +87,7 @@ impl TryInto<generator::Arguments> for GenerateArgs {
                 Framework::None => generator::Framework::None,
                 Framework::Sqlx => generator::Framework::Sqlx,
             },
+            timeout: self.timeout.into(),
         };
 
         Ok(args)
