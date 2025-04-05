@@ -70,6 +70,10 @@ impl Generator {
                 snippet.code.push_str(&format!("pub enum {} {{\n", name));
 
                 for value in &e.values {
+                    if self.options.framework == Framework::Sqlx {
+                        let rename_macro = format!("    #[sqlx(rename = \"{}\")]\n", value.name);
+                        snippet.code.push_str(&rename_macro);    
+                    }
                     let field_name = value.name.to_pascal_case();
                     let enum_field = format!("    {field_name},\n");
                     snippet.code.push_str(&enum_field);
@@ -99,7 +103,7 @@ impl Generator {
                 for attr in &composite.attributes {
                     let rust_type = self.provider.type_name_from(&attr.data_type);
                     self.add_type_imports(&mut snippet, &rust_type);
-                    let field_name = attr.name.to_snake_case();
+                    let field_name = attr.name.clone();
                     self.add_framework_attribute(&rust_type, &mut snippet);
                     let struct_field = format!("    pub {field_name}: {rust_type},\n");
                     snippet.code.push_str(&struct_field);
@@ -130,7 +134,7 @@ impl Generator {
                     }
 
                     self.add_type_imports(&mut snippet, &rust_type);
-                    let field_name = column.name.to_snake_case();
+                    let field_name = column.name.clone();
                     self.add_framework_attribute(&rust_type, &mut snippet);
 
                     let struct_field = format!("    pub {field_name}: {rust_type},\n");

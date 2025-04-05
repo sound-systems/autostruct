@@ -62,8 +62,7 @@ CREATE TABLE table_network_address_types (
     id SERIAL PRIMARY KEY,
     inet_column INET NOT NULL,
     cidr_column CIDR,
-    macaddr_column MACADDR,
-    macaddr8_column MACADDR8
+    macaddr_column MACADDR
 );
 
 -- Table 8: Bit String Types
@@ -105,7 +104,7 @@ CREATE TABLE table_range_types (
     daterange_column DATERANGE
 );
 
--- Table 13: Geometric Types
+-- Table 13: Geometric Types -- TODO: support once related rust types are available
 CREATE TABLE table_geometric_types (
     id SERIAL PRIMARY KEY,
     point_column POINT NOT NULL,

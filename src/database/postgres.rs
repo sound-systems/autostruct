@@ -11,6 +11,7 @@ use crate::{
 use anyhow::{Context, Error};
 use async_trait::async_trait;
 use cruet::Inflector;
+use geo_types::Line;
 use sqlx::{pool::PoolOptions, ConnectOptions, PgPool, Pool, Postgres};
 
 use super::{
@@ -333,8 +334,12 @@ const GEO_TYPES: &[&str] = &["point", "line", "lseg", "box", "path", "polygon", 
 const TEXT_SEARCH_TYPES: &[&str] = &["tsquery", "tsvector"];
 
 fn map_geometric_types(typ: &str) -> rust::Type {
-    // All geometric types are represented as strings in PostgreSQL text format
-    Type::String("String")
+    match typ {
+        "point" => Type::Custom("sqlx::postgres::types::PgPoint".to_string()),
+        "line" => Type::Custom("sqlx::postgres::types::PgLine".to_string()),
+        "lseg" => Type::String("String"),
+        _ => Type::String("String")
+    }
 }
 
 fn map_numeric_type(typ: &str) -> rust::Type {
@@ -367,8 +372,11 @@ fn map_temporal_type(typ: &str) -> rust::Type {
 fn map_specialized_type(typ: &str) -> rust::Type {
     match typ {
         t if NETWORK_TYPES.contains(&t) => match t {
-            "macaddr" | "macaddr8" => {
+            "macaddr" => {
                 Type::Custom("sqlx::types::mac_address::MacAddress".to_string())
+            }
+            "macaddr8" => {
+                Type::ByteArray("Vec<u8>")
             }
             _ => Type::IpNetwork("ipnetwork::IpNetwork"),
         },
